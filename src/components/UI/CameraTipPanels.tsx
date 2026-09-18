@@ -170,6 +170,12 @@ export const RtsCameraTipPanel = () => {
         </div>
 
         <div className="mb-1 flex">
+          <span>Pan up/down</span>
+          <div className="flex-1" />
+          <kbd>MMB</kbd>
+        </div>
+
+        <div className="mb-1 flex">
           <span>Movement</span>
           <div className="flex-1" />
           <kbd className="ml-1">W</kbd>
@@ -178,10 +184,24 @@ export const RtsCameraTipPanel = () => {
           <kbd className="ml-1">D</kbd>
         </div>
 
-        <div className="flex">
+        <div className="mb-1 flex">
+          <span>Up / down</span>
+          <div className="flex-1" />
+          <kbd className="ml-1">Q</kbd>
+          <kbd className="ml-1">E</kbd>
+        </div>
+
+        <div className="mb-1 flex">
           <span>Zoom</span>
           <div className="flex-1" />
           <kbd>Scroll</kbd>
+        </div>
+
+        <div className="flex">
+          <span>Move speed</span>
+          <div className="flex-1" />
+          <kbd>Scroll</kbd>
+          <span className="ml-1 opacity-60">while moving</span>
         </div>
       </motion.div>
     </motion.div>

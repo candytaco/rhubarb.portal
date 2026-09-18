@@ -68,8 +68,14 @@ var RtsControls = function (object, domElement) {
   // Set to false to disable use of the keys
   this.enableKeys = true
 
-  // Movement keys
-  this.keys = { W: 87, A: 65, S: 83, D: 68 }
+  // Movement keys: WASD moves in the ground plane, Q and E move along the world up axis
+  this.keys = { W: 87, A: 65, S: 83, D: 68, Q: 81, E: 69 }
+
+  // Multiplier on keyboard movement, changed by scrolling while a movement key is held
+  this.moveSpeed = 1.0
+  this.minMoveSpeed = 0.1
+  this.maxMoveSpeed = 16.0
+  this.moveSpeedStep = 1.2
 
   // Mouse buttons
   this.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN }
@@ -199,7 +205,13 @@ var RtsControls = function (object, domElement) {
 
         // keyboard panning has different "panning speed" compared to
         // mouse so doesn't need to be scaled
-        pan(x * scope.panSpeed * 0.5, y * scope.panSpeed * 0.5)
+        pan(x * scope.panSpeed * 0.5 * scope.moveSpeed, y * scope.panSpeed * 0.5 * scope.moveSpeed)
+      }
+
+      if (isMoving.up || isMoving.down) {
+        const z = isMoving.up ? 1 : -1
+
+        panWorldUp(z * scope.panSpeed * 0.5 * scope.moveSpeed)
       }
 
       // update condition is:
@@ -293,6 +305,22 @@ var RtsControls = function (object, domElement) {
     back: false,
     left: false,
     right: false,
+    up: false,
+    down: false,
+  }
+
+  // The middle mouse button pans in the screen plane rather than the ground plane
+  var panInScreenSpace = false
+
+  function isMovementKeyHeld() {
+    return (
+      isMoving.forward ||
+      isMoving.back ||
+      isMoving.left ||
+      isMoving.right ||
+      isMoving.up ||
+      isMoving.down
+    )
   }
 
   function getAutoRotationAngle() {
@@ -337,8 +365,8 @@ var RtsControls = function (object, domElement) {
   var panUp = (function () {
     var v = new Vector3()
 
-    return function panUp(distance, objectMatrix) {
-      if (scope.screenSpacePanning === true) {
+    return function panUp(distance, objectMatrix, screenSpace) {
+      if (scope.screenSpacePanning === true || screenSpace === true) {
         v.setFromMatrixColumn(objectMatrix, 1)
       } else {
         v.setFromMatrixColumn(objectMatrix, 0)
@@ -351,11 +379,12 @@ var RtsControls = function (object, domElement) {
     }
   })()
 
-  // deltaX and deltaY are in pixels; right and down are positive
+  // deltaX and deltaY are in pixels; right and down are positive. screenSpace pans along the
+  // camera's own up axis rather than the ground plane.
   var pan = (function () {
     var offset = new Vector3()
 
-    return function pan(deltaX, deltaY) {
+    return function pan(deltaX, deltaY, screenSpace) {
       var element = scope.domElement
 
       if (scope.object.isPerspectiveCamera) {
@@ -369,7 +398,11 @@ var RtsControls = function (object, domElement) {
 
         // we use only clientHeight here so aspect ratio does not distort speed
         panLeft((2 * deltaX * targetDistance) / element.clientHeight, scope.object.matrix)
-        panUp((2 * deltaY * targetDistance) / element.clientHeight, scope.object.matrix)
+        panUp(
+          (2 * deltaY * targetDistance) / element.clientHeight,
+          scope.object.matrix,
+          screenSpace
+        )
       } else if (scope.object.isOrthographicCamera) {
         // orthographic
         panLeft(
@@ -382,12 +415,41 @@ var RtsControls = function (object, domElement) {
           (deltaY * (scope.object.top - scope.object.bottom)) /
             scope.object.zoom /
             element.clientHeight,
-          scope.object.matrix
+          scope.object.matrix,
+          screenSpace
         )
       } else {
         // camera neither orthographic nor perspective
         console.warn('WARNING: RtsControls.js encountered an unknown camera type - pan disabled.')
         scope.enablePan = false
+      }
+    }
+  })()
+
+  // distance is in pixels; up is positive
+  var panWorldUp = (function () {
+    var offset = new Vector3()
+    var v = new Vector3()
+
+    return function panWorldUp(deltaZ) {
+      var element = scope.domElement
+
+      if (scope.object.isPerspectiveCamera) {
+        offset.copy(scope.object.position).sub(scope.target)
+        var targetDistance = offset.length()
+        targetDistance *= Math.tan(((scope.object.fov / 2) * Math.PI) / 180.0)
+
+        v.copy(scope.object.up).multiplyScalar(
+          (2 * deltaZ * targetDistance) / element.clientHeight
+        )
+        panOffset.add(v)
+      } else if (scope.object.isOrthographicCamera) {
+        v.copy(scope.object.up).multiplyScalar(
+          (deltaZ * (scope.object.top - scope.object.bottom)) /
+            scope.object.zoom /
+            element.clientHeight
+        )
+        panOffset.add(v)
       }
     }
   })()
@@ -483,7 +545,7 @@ var RtsControls = function (object, domElement) {
 
     panDelta.subVectors(panEnd, panStart).multiplyScalar(scalePanSpeed(scope.panSpeed))
 
-    pan(panDelta.x, panDelta.y)
+    pan(panDelta.x, panDelta.y, panInScreenSpace)
 
     panStart.copy(panEnd)
 
@@ -495,6 +557,22 @@ var RtsControls = function (object, domElement) {
   }
 
   function handleMouseWheel(event) {
+    // While a movement key is held the wheel sets how fast those keys move the camera
+    if (isMovementKeyHeld()) {
+      if (event.deltaY < 0) {
+        scope.moveSpeed *= scope.moveSpeedStep
+      } else if (event.deltaY > 0) {
+        scope.moveSpeed /= scope.moveSpeedStep
+      }
+
+      scope.moveSpeed = Math.max(
+        scope.minMoveSpeed,
+        Math.min(scope.maxMoveSpeed, scope.moveSpeed)
+      )
+
+      return
+    }
+
     if (event.deltaY < 0) {
       dollyIn(getZoomScale())
     } else if (event.deltaY > 0) {
@@ -522,6 +600,14 @@ var RtsControls = function (object, domElement) {
 
       case scope.keys.D:
         isMoving.right = true
+        break
+
+      case scope.keys.Q:
+        isMoving.up = true
+        break
+
+      case scope.keys.E:
+        isMoving.down = true
         break
 
       default:
@@ -552,6 +638,14 @@ var RtsControls = function (object, domElement) {
 
       case scope.keys.D:
         isMoving.right = false
+        break
+
+      case scope.keys.Q:
+        isMoving.up = false
+        break
+
+      case scope.keys.E:
+        isMoving.down = false
         break
 
       default:
@@ -691,6 +785,8 @@ var RtsControls = function (object, domElement) {
 
     var mouseAction
 
+    panInScreenSpace = event.button === 1
+
     switch (event.button) {
       case 0:
         mouseAction = scope.mouseButtons.LEFT
@@ -803,12 +899,13 @@ var RtsControls = function (object, domElement) {
     scope.dispatchEvent(endEvent)
 
     state = STATE.NONE
+    panInScreenSpace = false
   }
 
   function onMouseWheel(event) {
     if (
       scope.enabled === false ||
-      scope.enableZoom === false ||
+      (scope.enableZoom === false && !isMovementKeyHeld()) ||
       (state !== STATE.NONE && state !== STATE.ROTATE)
     )
       return
