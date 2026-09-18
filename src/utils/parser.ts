@@ -1,4 +1,5 @@
-export const getDurationFromTicks = (ticks: number, tickRate = 66.67) => {
+// Portal 2 runs 60 ticks per second
+export const getDurationFromTicks = (ticks: number, tickRate = 60) => {
   const totalSeconds = ticks / tickRate
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)

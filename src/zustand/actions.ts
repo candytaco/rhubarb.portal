@@ -2,12 +2,17 @@ import { get, merge, clamp, sortBy, round } from 'lodash'
 import localForage from 'localforage'
 import * as THREE from 'three'
 
-import { AsyncParser } from '@components/Analyse/Data/AsyncParser'
-import type { MapBoundaries } from '@components/Analyse/Data/PositionCache'
+import type { Portal2Session } from '@components/Analyse/Data/Session'
+import { parseSession, DemoFileInput } from '@components/Analyse/Data/SessionParser'
 import { getMapBoundaries, getMapBoundariesKey } from '@components/Analyse/MapBoundaries'
 import { PLAYBACK_SPEED_OPTIONS } from '@components/UI/PlaybackPanel'
 
-import { getSceneActors, parseMapBoundaries, translatePointBetweenBoundaryMins } from '@utils/scene'
+import {
+  getSceneActors,
+  parseMapBoundaries,
+  DEFAULT_MAP_BOUNDARIES,
+  MapBoundaries,
+} from '@utils/scene'
 import { fetchMapWorldBounds } from '@utils/game'
 import {
   buildSetupShareUrl,
@@ -18,7 +23,6 @@ import {
   normalizeStoredSetups,
   parseSetupHash,
 } from '@utils/setups'
-import { CLASS_ORDER_MAP } from '@constants/mappings'
 import {
   ControlsMode,
   Download,
@@ -39,43 +43,61 @@ import { isMobile } from 'react-device-detect'
 // ─── PARSER ─────────────────────────────────────────────────────────────────────
 //
 
+const MAX_DEMOS_PER_SESSION = 2
+
+const readFileBuffer = (file: File): Promise<ArrayBuffer> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.onerror = () => reject(reader.error ?? new Error(`Could not read ${file.name}`))
+    reader.readAsArrayBuffer(file)
+  })
+
+/**
+ * Loads one or two dropped demo files (both players' demos of the same session)
+ */
 export const onUploadDemoAction = async (files: File[]) => {
-  const demoFile: File = files[0]
-
-  const reader = new FileReader()
-
-  reader.readAsArrayBuffer(demoFile)
-
-  reader.onload = function () {
-    const fileBuffer = reader.result as ArrayBuffer
-    parseDemoAction(fileBuffer)
+  const demoFiles = files
+    .filter(file => file.name.toLowerCase().endsWith('.dem'))
+    .slice(0, MAX_DEMOS_PER_SESSION)
+  if (demoFiles.length === 0) {
+    alert('Drop one or two Portal 2 .dem files.')
+    return
   }
+
+  const inputs: DemoFileInput[] = []
+  for (const file of demoFiles) {
+    inputs.push({ name: file.name, buffer: await readFileBuffer(file) })
+  }
+
+  await parseDemoAction(inputs)
 }
 
-export const parseDemoAction = async (fileBuffer: ArrayBuffer) => {
+export const parseDemoAction = async (inputs: DemoFileInput[]) => {
   try {
     dispatch({ type: 'PARSE_DEMO_INIT' })
 
-    const parsedDemo = new AsyncParser(fileBuffer, async progress => {
-      dispatch({ type: 'PARSE_DEMO_PROGRESS', payload: progress })
-    })
+    let session: Portal2Session
 
     try {
-      await parsedDemo.cache()
+      session = await parseSession(inputs, (progress, stage) => {
+        dispatch({ type: 'PARSE_DEMO_PROGRESS', payload: { progress, stage } })
+      })
     } catch (error) {
-      alert(`Unable to load demo. Please make sure it's a valid SourceTV .dem file.`)
+      const message = error instanceof Error ? error.message : String(error)
+      alert(`Unable to load demo. Please make sure it's a Portal 2 .dem file.\n\n${message}`)
       throw error
     }
 
-    console.log('%c-------- Demo parsed --------', 'color: blue; font-size: 16px;')
-    console.log(parsedDemo)
-    console.log('%c-----------------------------', 'color: blue; font-size: 16px;')
+    console.log('%c-------- Session parsed --------', 'color: blue; font-size: 16px;')
+    console.log(session)
+    console.log('%c--------------------------------', 'color: blue; font-size: 16px;')
 
     dispatch({ type: 'PARSE_DEMO_SUCCESS' })
 
-    await loadSceneFromDemoAction(parsedDemo)
+    await loadSceneFromSessionAction(session)
 
-    return parsedDemo
+    return session
   } catch (error) {
     dispatch({ type: 'PARSE_DEMO_ERROR', payload: error })
     throw error
@@ -86,40 +108,41 @@ export const parseDemoAction = async (fileBuffer: ArrayBuffer) => {
 // ─── SCENE ──────────────────────────────────────────────────────────────────────
 //
 
-export const loadSceneFromDemoAction = async (parsedDemo: AsyncParser) => {
+const sessionBoundaries = (session: Portal2Session): MapBoundaries => ({
+  boundaryMin: { x: session.bounds.min[0], y: session.bounds.min[1], z: session.bounds.min[2] },
+  boundaryMax: { x: session.bounds.max[0], y: session.bounds.max[1], z: session.bounds.max[2] },
+})
+
+export const loadSceneFromSessionAction = async (session: Portal2Session) => {
   try {
     toggleUIPanelAction('About', false)
-    const mapKey = getMapBoundariesKey(parsedDemo.header.map) ?? parsedDemo.header.map
+    const mapName = session.map
+    const mapKey = getMapBoundariesKey(mapName) ?? mapName
     const savedRtsCenter = getState().settings.scene.rtsCenters[mapKey]
-    const boundaryOverrides: Partial<MapBoundaries> = getMapBoundaries(parsedDemo.header.map) ?? {}
-    const modelWorldBounds = await fetchMapWorldBounds(parsedDemo.header.map)
-    const sceneBoundaries = { ...boundaryOverrides, ...parsedDemo.world }
-    const referenceBoundaryMin = modelWorldBounds?.boundaryMin ?? sceneBoundaries.boundaryMin
-    const rtsCenter = savedRtsCenter ?? boundaryOverrides.rtsCenter
-    const sceneRtsCenter = rtsCenter
-      ? translatePointBetweenBoundaryMins(
-          rtsCenter,
-          referenceBoundaryMin,
-          sceneBoundaries.boundaryMin
-        )
-      : undefined
+    const overrides = getMapBoundaries(mapName) ?? {}
+    const modelWorldBounds = await fetchMapWorldBounds(mapName)
+
+    // The recorded positions bound the scene; converted map assets widen it to the whole map
+    const boundaries: MapBoundaries = {
+      ...overrides,
+      ...sessionBoundaries(session),
+      ...(modelWorldBounds ?? {}),
+    }
+    const rtsCenter = savedRtsCenter ?? overrides.rtsCenter ?? centerOf(sessionBoundaries(session))
 
     // Remember to update the non-redux instances!
-    useInstance.getState().setParsedDemo(parsedDemo)
+    useInstance.getState().setSession(session)
     useInstance.getState().setFocusedObject(undefined)
     useInstance.getState().setLastFocusedPOV(undefined)
     useInstance.getState().setMapCenterPickerActive(false)
 
     dispatch({
-      type: 'LOAD_SCENE_FROM_PARSER',
+      type: 'LOAD_SCENE',
       payload: {
         scene: {
-          players: parsedDemo.entityPlayerMap,
-          map: parsedDemo.header.map,
-          bounds: parseMapBoundaries({
-            ...sceneBoundaries,
-            ...(sceneRtsCenter ? { rtsCenter: sceneRtsCenter } : {}),
-          }),
+          map: mapName,
+          mapAssetsAvailable: modelWorldBounds !== null,
+          bounds: parseMapBoundaries({ ...boundaries, rtsCenter }),
           controls: {
             mode: 'rts',
           },
@@ -128,8 +151,8 @@ export const loadSceneFromDemoAction = async (parsedDemo: AsyncParser) => {
           playing: true,
           speed: 1,
           tick: 1,
-          maxTicks: parsedDemo.ticks - 1,
-          intervalPerTick: parsedDemo.intervalPerTick,
+          maxTicks: session.tickAxis.length - 1,
+          intervalPerTick: session.intervalPerTick,
         },
       },
     })
@@ -138,44 +161,57 @@ export const loadSceneFromDemoAction = async (parsedDemo: AsyncParser) => {
   }
 }
 
+const centerOf = (boundaries: MapBoundaries) => ({
+  x: 0.5 * (boundaries.boundaryMin.x + boundaries.boundaryMax.x),
+  y: 0.5 * (boundaries.boundaryMin.y + boundaries.boundaryMax.y),
+  z: 0.5 * (boundaries.boundaryMin.z + boundaries.boundaryMax.z),
+})
+
 export const loadEmptySceneMapAction = async (mapName: string) => {
   try {
-    // Try to get world bounds from conversion.json (derived from BSP),
-    // then merge with any hardcoded camera/control offsets
+    // World bounds come from conversion.json (derived from the BSP) when the map has assets,
+    // merged with any hardcoded camera/control offsets
     const worldBounds = await fetchMapWorldBounds(mapName)
-    const overrides = getMapBoundaries(mapName)
+    const overrides = getMapBoundaries(mapName) ?? {}
 
-    const boundaries = worldBounds
-      ? { ...overrides, ...worldBounds }
-      : overrides
+    const boundaries: MapBoundaries = {
+      ...DEFAULT_MAP_BOUNDARIES,
+      ...overrides,
+      ...(worldBounds ?? {}),
+    }
     const mapKey = getMapBoundariesKey(mapName) ?? mapName
     const savedRtsCenter = getState().settings.scene.rtsCenters[mapKey]
-    const boundariesWithCenter = savedRtsCenter && boundaries
+    const boundariesWithCenter = savedRtsCenter
       ? { ...boundaries, rtsCenter: savedRtsCenter }
       : boundaries
 
-    if (!boundariesWithCenter?.boundaryMin || !boundariesWithCenter?.boundaryMax) {
-      alert('Unable to load map. Could not determine map boundaries.')
-      return
-    }
-
     // Remember to update the non-redux instances!
-    useInstance.getState().setParsedDemo(undefined)
+    useInstance.getState().setSession(undefined)
     useInstance.getState().setFocusedObject(undefined)
     useInstance.getState().setLastFocusedPOV(undefined)
     useInstance.getState().setMapCenterPickerActive(false)
 
     dispatch({
-      type: 'LOAD_SCENE_FROM_PARSER',
+      type: 'LOAD_SCENE',
       payload: {
         scene: {
           ...initialState.scene,
           map: mapName,
+          mapAssetsAvailable: worldBounds !== null,
           bounds: parseMapBoundaries(boundariesWithCenter),
         },
         playback: initialState.playback,
       },
     })
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+export const setMapAssetsAvailableAction = async (available: boolean) => {
+  try {
+    if (getState().scene.mapAssetsAvailable === available) return
+    dispatch({ type: 'SET_MAP_ASSETS_AVAILABLE', payload: available })
   } catch (error) {
     console.error(error)
   }
@@ -187,27 +223,9 @@ export const changeControlsModeAction = async (
 ) => {
   try {
     if (mode === ControlsMode.POV) {
-      // In order to determine which POV we should follow next, we have to figure out the
-      // players at the current tick & what classes they currently are. This information isn't
-      // available in the THREE.js scene directly, so we need to call getPlayersAtTick() and
-      // then "append" that information to each scene Actor. This definitely seems suboptimal,
-      // but this action should not be called super frequently so we'll just let it slide.
-      const tick = getState().playback.tick
-      const demo = useInstance.getState().parsedDemo
-      let playersThisTick = demo!.getPlayersAtTick(tick)
-
+      // Cycle through the bots in slot order (blue, orange)
       let actors = getSceneActors(useInstance.getState().threeScene)
-
-      // Append the current selected class to the Actor
-      actors.forEach(actor => {
-        const player = playersThisTick.find(
-          player => player.user.entityId === actor.userData.entityId
-        )
-        actor.userData.classId = player?.classId || 0
-      })
-
-      // Sort by teams then class order
-      actors = sortBy(actors, [o => o.userData.team, o => CLASS_ORDER_MAP[o.userData.classId]])
+      actors = sortBy(actors, [o => o.userData.slot])
 
       const focusedObject = useInstance.getState().focusedObject
       const lastFocusedPOV = useInstance.getState().lastFocusedPOV
@@ -231,7 +249,7 @@ export const changeControlsModeAction = async (
       // Player transitioned from RTS to POV
       // So we should go back to the POV of the last person they spectated
       if (focusedObject === undefined) {
-        const entityId = lastFocusedPOV?.userData?.entityId || actors[0]?.userData?.entityId
+        const entityId = lastFocusedPOV?.userData?.entityId ?? actors[0]?.userData?.entityId
         jumpToPlayerPOVCamera(entityId)
         return
       }
@@ -477,8 +495,7 @@ export const updateSettingsOptionAction = async (option: string, value: any) => 
 
 export const toggleMapCenterPickerAction = async (active?: boolean) => {
   try {
-    const nextActive =
-      active !== undefined ? active : !useInstance.getState().mapCenterPickerActive
+    const nextActive = active !== undefined ? active : !useInstance.getState().mapCenterPickerActive
     useInstance.getState().setMapCenterPickerActive(nextActive)
   } catch (error) {
     console.error(error)
@@ -490,21 +507,12 @@ export const setSceneRtsCenterAction = async (point: { x: number; y: number; z: 
     const nextCenter = new THREE.Vector3(point.x, point.y, point.z)
     const mapName = getState().scene.map
     const mapKey = getMapBoundariesKey(mapName) ?? mapName
-    const sceneBoundaryMin = getState().scene.bounds.min
 
     dispatch({ type: 'SET_SCENE_RTS_CENTER', payload: nextCenter })
     useInstance.getState().setMapCenterPickerActive(false)
 
-    const modelWorldBounds = await fetchMapWorldBounds(mapName)
-    const settingsCenter = modelWorldBounds
-      ? translatePointBetweenBoundaryMins(
-          point,
-          sceneBoundaryMin,
-          modelWorldBounds.boundaryMin
-        )
-      : point
-
-    await updateSettingsOptionAction(`scene.rtsCenters.${mapKey}`, settingsCenter)
+    // Scene coordinates are raw game coordinates, so the point is stored as is
+    await updateSettingsOptionAction(`scene.rtsCenters.${mapKey}`, point)
   } catch (error) {
     console.error(error)
   }
@@ -694,9 +702,9 @@ export const applySetupAction = async (
     }
 
     const currentMap = getState().scene.map
-    const parsedDemo = useInstance.getState().parsedDemo
+    const session = useInstance.getState().session
 
-    if (parsedDemo || currentMap !== setup.map) {
+    if (session || currentMap !== setup.map) {
       await loadEmptySceneMapAction(setup.map)
     }
 
@@ -1013,6 +1021,14 @@ export const updateDownloadAction = async (
         dispatch({ type: 'UPDATE_DOWNLOAD', payload: { url, status: 'success' } })
       }
     }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+export const removeDownloadAction = async (url: string) => {
+  try {
+    dispatch({ type: 'REMOVE_DOWNLOAD', payload: { url } })
   } catch (error) {
     console.error(error)
   }

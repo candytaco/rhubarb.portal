@@ -1,30 +1,30 @@
 import axios from 'axios'
 
-import { addDownloadAction, updateDownloadAction, parseDemoAction } from '@zus/actions'
+import {
+  addDownloadAction,
+  removeDownloadAction,
+  updateDownloadAction,
+  parseDemoAction,
+} from '@zus/actions'
+import type { DemoFileInput } from '@components/Analyse/Data/SessionParser'
 
 //
-// ─── LOADING A DEMO FROM THE URL ────────────────────────────────────────────────
+// ─── LOADING DEMOS FROM THE URL ─────────────────────────────────────────────────
 //
-// Lets a demo be opened by link instead of only by drag-and-drop:
+// Lets a session be opened by link instead of only by drag-and-drop:
 //
-//   /?demo=693769                       a demos.tf id, resolved via their public API
-//   /?demoUrl=https://…/foo.dem         a direct .dem URL
-//   …&tick=1000                         optional tick to seek to once loaded
+//   /?demoUrl=https://…/player1.dem                     one demo
+//   /?demoUrl=https://…/player1.dem&demoUrl2=https://…/player2.dem   both players' demos
+//   …&tick=1000                                         optional axis row to seek to once loaded
 //
-// This makes dribble.tf linkable from anywhere a demo is referenced — match pages,
-// forum posts, Discord — and is what an <iframe> embed needs to say which demo to show.
-//
-// The demo is fetched by the visitor's browser; demos.tf serves
-// `access-control-allow-origin: *`, so no proxy is involved.
+// The demos are fetched by the visitor's browser.
 //
 
-const DEMOS_TF_API = 'https://api.demos.tf/demos'
-
-// ?demoUrl= is attacker-controllable, so the hosts it may point at are restricted. Nothing
-// here can reach a private network (it's a browser fetch, not server-side), but an
-// unrestricted version would turn any dribble.tf link into "fetch this arbitrary URL with
-// dribble.tf as the referrer". Extend this if you self-host demos elsewhere.
-const ALLOWED_DEMO_HOSTS = [/(^|\.)demos\.tf$/i]
+// ?demoUrl= is attacker-controllable, so the hosts it may point at are restricted to the page's
+// own origin plus this list. Nothing here can reach a private network (it's a browser fetch, not
+// server-side), but an unrestricted version would turn any viewer link into "fetch this arbitrary
+// URL with the viewer as the referrer". Extend this when demos are hosted elsewhere.
+const ALLOWED_DEMO_HOSTS: RegExp[] = []
 
 const isAllowedDemoUrl = (url: string): boolean => {
   try {
@@ -40,7 +40,7 @@ const isAllowedDemoUrl = (url: string): boolean => {
 export type UrlDemoStatus =
   | { state: 'idle' }
   | { state: 'resolving' }
-  | { state: 'error'; message: string; link?: { href: string; label: string } }
+  | { state: 'error'; message: string }
 
 type UrlDemoStatusListener = (status: UrlDemoStatus) => void
 
@@ -51,7 +51,9 @@ export const getUrlDemoStatus = () => urlDemoStatus
 
 export const subscribeToUrlDemoStatus = (listener: UrlDemoStatusListener) => {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 const setUrlDemoStatus = (status: UrlDemoStatus) => {
@@ -60,15 +62,12 @@ const setUrlDemoStatus = (status: UrlDemoStatus) => {
 }
 
 export interface UrlDemoRequest {
-  url: string
-  name: string
-  /** Map the demo was played on, when known up front — see resolveUrlDemoAction. */
-  map?: string
+  urls: string[]
+  names: string[]
   tick: number
-  demoId?: string
 }
 
-const reportUrlDemoError = (error: unknown, demoId?: string) => {
+const reportUrlDemoError = (error: unknown) => {
   console.error('[url-demo] failed to load demo', error)
 
   setUrlDemoStatus({
@@ -77,90 +76,81 @@ const reportUrlDemoError = (error: unknown, demoId?: string) => {
       error instanceof Error && error.message
         ? error.message
         : 'Could not load this demo. It may have been removed.',
-    link: demoId ? { href: `https://demos.tf/${demoId}`, label: 'View on demos.tf' } : undefined,
   })
 }
 
 /**
- * Phase 1 — work out WHAT to load, without downloading it yet.
- *
- * Split from the download deliberately: the demos.tf record names the map, and knowing it
- * before the scene boots lets App load that map's geometry straight away. Otherwise the
- * viewer downloads the default map's (multi-MB) model first and throws it away the moment
- * the demo finishes parsing.
- *
- * Resolves to null when no demo was requested, so the normal drag-and-drop flow is untouched.
+ * Phase 1: work out WHAT to load, without downloading it yet. Resolves to null when no demo was
+ * requested, so the normal drag-and-drop flow is untouched.
  */
 export const resolveUrlDemoAction = async (): Promise<UrlDemoRequest | null> => {
   const params = new URLSearchParams(window.location.search)
-  const demoId = params.get('demo')
-  const explicitUrl = params.get('demoUrl')
+  const urls = [params.get('demoUrl'), params.get('demoUrl2')].filter(
+    (url): url is string => typeof url === 'string' && url.length > 0
+  )
 
-  if (!demoId && !explicitUrl) return null
+  if (urls.length === 0) return null
 
   const tick = Number(params.get('tick')) || 0
 
   try {
     setUrlDemoStatus({ state: 'resolving' })
 
-    let request: UrlDemoRequest
-
-    if (demoId) {
-      // demos.tf's API is public, keyless and CORS-open. The record also carries the
-      // original filename, which reads better in the download overlay than the hashed
-      // storage path, plus the map name we want for the head start above.
-      const { data } = await axios.get(`${DEMOS_TF_API}/${encodeURIComponent(demoId)}`, {
-        responseType: 'json',
-      })
-
-      if (!data?.url) throw new Error(`demos.tf ${demoId} has no downloadable file`)
-
-      request = { url: data.url, name: data.name ?? `${demoId}.dem`, map: data.map, tick, demoId }
-    } else {
-      const url = explicitUrl as string
-      request = { url, name: decodeURIComponent(url.split('/').pop() ?? 'demo.dem'), tick }
+    for (const url of urls) {
+      if (!isAllowedDemoUrl(url)) throw new Error('That demo host is not allowed')
     }
-
-    if (!isAllowedDemoUrl(request.url)) throw new Error('That demo host is not allowed')
 
     setUrlDemoStatus({ state: 'idle' })
 
-    return request
+    return {
+      urls,
+      names: urls.map(url => decodeURIComponent(url.split('/').pop() ?? 'demo.dem')),
+      tick,
+    }
   } catch (error) {
-    reportUrlDemoError(error, demoId ?? undefined)
+    reportUrlDemoError(error)
     return null
   }
 }
 
 /**
- * Phase 2 — download and parse. Must run after the viewer has mounted, so the existing
- * download progress overlay is on screen for what is often a 50MB+ transfer.
- *
- * Returns the tick to seek to, which the caller applies once the scene is up.
+ * Phase 2: download and parse. Must run after the viewer has mounted, so the download progress
+ * overlay is on screen. Returns the tick to seek to, which the caller applies once the scene is up.
  */
 export const loadUrlDemoAction = async (
   request: UrlDemoRequest
 ): Promise<{ tick: number } | null> => {
   try {
-    await addDownloadAction({ type: 'demo', url: request.url, name: request.name })
+    const inputs: DemoFileInput[] = []
 
-    const fileBuffer = await axios
-      .get(request.url, {
-        responseType: 'arraybuffer',
-        onDownloadProgress: event => {
-          updateDownloadAction(request.url, {
-            progress: event.progress ? event.progress * 100 : 0,
-            size: event.total,
-          })
-        },
-      })
-      .then(res => res.data)
+    for (let index = 0; index < request.urls.length; index++) {
+      const url = request.urls[index]
+      await addDownloadAction({ type: 'demo', url, name: request.names[index] })
 
-    await parseDemoAction(fileBuffer)
+      const buffer: ArrayBuffer = await axios
+        .get(url, {
+          responseType: 'arraybuffer',
+          onDownloadProgress: event => {
+            updateDownloadAction(url, {
+              progress: event.progress ? event.progress * 100 : 0,
+              size: event.total,
+            })
+          },
+        })
+        .then(res => res.data)
+
+      // Compressed responses carry no total, so the progress callback cannot reach 100%: clear the
+      // entry once the bytes are in. The parse progress overlay takes over from here.
+      removeDownloadAction(url)
+      inputs.push({ name: request.names[index], buffer })
+    }
+
+    await parseDemoAction(inputs)
 
     return { tick: request.tick }
   } catch (error) {
-    reportUrlDemoError(error, request.demoId)
+    request.urls.forEach(url => removeDownloadAction(url))
+    reportUrlDemoError(error)
     return null
   }
 }

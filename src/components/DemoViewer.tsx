@@ -14,24 +14,23 @@ import { RtsControls } from '@components/Controls/RtsControls'
 import { SpectatorControls } from '@components/Controls/SpectatorControls'
 import { CanvasKeyHandler } from '@components/Scene/CanvasKeyHandler'
 import { Lights } from '@components/Scene/Lights'
-import { Actors } from '@components/Scene/Actors'
-import { Projectiles } from '@components/Scene/Projectiles'
+import { Actors, ActorProps } from '@components/Scene/Actors'
+import { Portals } from '@components/Scene/Portals'
+import { PuzzleElements } from '@components/Scene/PuzzleElements'
 import { World } from '@components/Scene/World'
 import { Skybox } from '@components/Scene/Skybox'
 import { Stickers } from '@components/Scene/Stickers'
-import { AsyncParser } from './Analyse/Data/AsyncParser'
-import { CachedPlayer } from './Analyse/Data/PlayerCache'
-import { InterpolatedProjectile } from './Scene/Projectiles'
+import type { Portal2Session } from './Analyse/Data/Session'
 
 // UI Panels
 import { AboutPanel } from '@components/UI/AboutPanel'
 import { SettingsPanel } from '@components/UI/SettingsPanel'
 import { PlaybackPanel } from '@components/UI/PlaybackPanel'
-import { Killfeed } from '@components/UI/Killfeed'
+import { EventFeed } from '@components/UI/EventFeed'
 import { ChatHud } from '@components/UI/ChatHud'
 import { PlayerStatuses } from '@components/UI/PlayerStatuses'
 import { FocusedPlayer } from '@components/UI/FocusedPlayer'
-import { MatchKillfeedPanel } from '@components/UI/MatchKillfeedPanel'
+import { EventLogPanel } from '@components/UI/EventLogPanel'
 import { BookmarksPanel } from '@components/UI/BookmarksPanel'
 import { SetupsPanel } from '@components/UI/SetupsPanel'
 import { FpsCounter } from '@components/UI/FpsCounter'
@@ -50,10 +49,10 @@ import {
   playbackJumpAction,
   setSceneRtsCenterAction,
 } from '@zus/actions'
-import { ActorProps } from './Scene/Actors'
 import { isPerfLoggingEnabled, readJsHeapMemoryMb } from '@utils/misc'
 import { useIsMobile } from '@utils/hooks'
 import { cn } from '@utils/styling'
+import { getPlayerFrames, getPortalFrames, PlayerFrame, PortalFrame } from '@utils/session'
 import { ControlsMode, DrawingTool, SavedSetupCamera } from '@constants/types'
 import { getWorldIntersectionFromScreen } from '@utils/raycast'
 
@@ -73,6 +72,8 @@ const RTS_CAMERA_OFFSET = new THREE.Vector3(0, 250, 1000)
 const RTS_TARGET_DISTANCE = 1500
 const ENABLE_DEBUG_MAP_OFFSET = false
 const MARKER_COLOR = '#37ff5f'
+// portal rings stay highlighted this many axis rows after something went through them
+const TRAVERSAL_HIGHLIGHT_ROWS = 45
 
 const roundOffset = (x: number, y: number, z: number) => ({
   x: Math.round(x),
@@ -108,7 +109,6 @@ const Controls = () => {
   const spectatorRef = useRef<any>()
   const pendingSetupCameraRef = useRef<SavedSetupCamera | null>(null)
   const skipSpectatorAutoEnableRef = useRef(false)
-  // const [spectatorRef, setSpectatorRef] = useState()
   const { gl, scene, set } = useThree()
 
   const settings = useStore(state => state.settings)
@@ -437,7 +437,8 @@ const DoubleTapSeek = () => {
     if (e.touches.length > 1) return
 
     const touch = e.changedTouches[0]
-    const side = touch.clientX < window.innerWidth / 2 ? 'left' : 'right'
+    const rect = e.currentTarget.getBoundingClientRect()
+    const side = touch.clientX < rect.left + rect.width / 2 ? 'left' : 'right'
     const now = Date.now()
 
     if (
@@ -499,11 +500,7 @@ const DoubleTapSeek = () => {
 }
 
 // FocusedPlayer wrapper - adjusts positioning for mobile
-const FocusedPlayerLayer = (props: {
-  players: CachedPlayer[]
-  tick: number
-  intervalPerTick: number
-}) => {
+const FocusedPlayerLayer = (props: { players: PlayerFrame[] }) => {
   const isMobile = useIsMobile()
   return (
     <div
@@ -518,7 +515,7 @@ const FocusedPlayerLayer = (props: {
 }
 
 // Panel toolbar - functional component so we can use useIsMobile hook
-const PanelToolbar = ({ hasDemoLoaded }: { hasDemoLoaded: boolean }) => {
+const PanelToolbar = ({ hasSession }: { hasSession: boolean }) => {
   const isMobile = useIsMobile()
 
   if (isMobile) {
@@ -528,8 +525,8 @@ const PanelToolbar = ({ hasDemoLoaded }: { hasDemoLoaded: boolean }) => {
           <SettingsPanel />
           <AboutPanel />
           <SetupsPanel />
-          {hasDemoLoaded && <MatchKillfeedPanel />}
-          {hasDemoLoaded && <BookmarksPanel />}
+          {hasSession && <EventLogPanel />}
+          {hasSession && <BookmarksPanel />}
         </div>
       </div>
     )
@@ -549,13 +546,13 @@ const PanelToolbar = ({ hasDemoLoaded }: { hasDemoLoaded: boolean }) => {
         <SetupsPanel />
       </div>
 
-      {hasDemoLoaded && (
+      {hasSession && (
         <div className="ui-layer m-4 mt-40 items-start justify-start">
-          <MatchKillfeedPanel />
+          <EventLogPanel />
         </div>
       )}
 
-      {hasDemoLoaded && (
+      {hasSession && (
         <div className="ui-layer m-4 mt-52 items-start justify-start">
           <BookmarksPanel />
         </div>
@@ -564,11 +561,36 @@ const PanelToolbar = ({ hasDemoLoaded }: { hasDemoLoaded: boolean }) => {
   )
 }
 
+// Notice shown while a map has no converted assets
+const MapAssetsNotice = ({ map }: { map: string }) => {
+  const available = useStore(state => state.scene.mapAssetsAvailable)
+  const isMobile = useIsMobile()
+
+  if (available !== false) return null
+
+  return (
+    <div
+      className={cn(
+        'ui-layer pointer-events-none items-start justify-center',
+        isMobile ? 'mt-14' : 'mt-4'
+      )}
+    >
+      <div className="rounded-lg bg-pp-panel/70 px-4 py-2 text-center text-xs">
+        <span className="font-bold">{map}</span>
+        <span className="opacity-70">
+          {' '}
+          has no converted map assets yet, showing recorded positions over a grid
+        </span>
+      </div>
+    </div>
+  )
+}
+
 //
 // ─── COMPONENT ──────────────────────────────────────────────────────────────────
 //
 type DemoViewerProps = {
-  demo?: AsyncParser
+  session?: Portal2Session
   map: string
 }
 
@@ -624,13 +646,10 @@ class DemoViewer extends Component<DemoViewerProps> {
   // ─── ANIMATION LOOP ─────────────────────────────────────────────────────────────
   //
 
-  // TODO: it may be better to try using THREE.js Clock for playback instead
-  // of this requestAnimationFrame() implementation
-  // https://threejs.org/docs/#api/en/core/Clock
   animate = async (timestamp: number) => {
     const { playback } = this.state
 
-    const intervalPerTick = playback.intervalPerTick || 0.015
+    const intervalPerTick = playback.intervalPerTick || 1 / 60
     const millisPerTick = 1000 * intervalPerTick * (1 / playback.speed)
     const frameDelta = timestamp - this.lastTimestamp
 
@@ -726,71 +745,46 @@ class DemoViewer extends Component<DemoViewerProps> {
 
   render() {
     const { playback, settings } = this.state
-    const { demo, map } = this.props
+    const { session, map } = this.props
     const INTERP_DELAY_TICKS = 2
     const renderTick = Math.max(1, playback.tick - INTERP_DELAY_TICKS)
-    const MAX_PROJECTILES_FOR_HIGH_QUALITY_INTERPOLATION = 16
     // Cap Retina/high-density DPR so fill-rate does not erase later draw-call wins.
     const canvasDpr =
       typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 1.25)
 
-    let playersThisTick: CachedPlayer[] = []
-    let playersNextTick: CachedPlayer[] = []
+    let playersThisTick: PlayerFrame[] = []
     let actorsThisTick: ActorProps[] = []
-    let projectilesThisTick: InterpolatedProjectile[] = []
+    let portalsThisTick: PortalFrame[] = []
+    let highlightedPortals: Set<number> | undefined
 
-    if (!!demo) {
-      playersThisTick = demo
-        .getPlayersAtTick(renderTick)
-        .filter(({ connected, teamId }) => connected && [2, 3].includes(teamId)) // Only get CONNECTED and RED/BLU players
+    if (session) {
+      playersThisTick = getPlayerFrames(session, renderTick)
+      const playersNextTick = getPlayerFrames(session, renderTick + 1)
+      actorsThisTick = playersThisTick.map(frame => ({
+        frame,
+        next: playersNextTick.find(candidate => candidate.slot === frame.slot) ?? null,
+      }))
 
-      playersNextTick = demo
-        .getPlayersAtTick(renderTick + 1)
-        .filter(({ connected, teamId }) => connected && [2, 3].includes(teamId)) // Only get CONNECTED and RED/BLU players
-
-      const nextTickMap = new Map(playersNextTick.map(p => [p.user.entityId, p]))
-
-      actorsThisTick = playersThisTick.map(player => {
-        const next = nextTickMap.get(player.user.entityId)
-        return {
-          ...player,
-          positionNext: next?.position ?? player.position,
-          viewAnglesNext: next?.viewAngles ?? player.viewAngles,
+      if (settings.scene.showPortals) {
+        portalsThisTick = getPortalFrames(session, renderTick)
+        highlightedPortals = new Set<number>()
+        for (const event of session.events) {
+          if (event.row > renderTick) break
+          if (
+            event.type === 'portal_traversal' &&
+            renderTick - event.row <= TRAVERSAL_HIGHLIGHT_ROWS
+          ) {
+            const entered = Number(event.data?.enteredPortal ?? -1)
+            const exited = Number(event.data?.exitPortal ?? -1)
+            if (entered >= 0) highlightedPortals.add(entered)
+            if (exited >= 0) highlightedPortals.add(exited)
+          }
         }
-      })
-
-      const projectilesCurrentTick = demo.getProjectilesAtTick(renderTick)
-      const projectilesNextTick = demo.getProjectilesAtTick(renderTick + 1)
-      const projectilesNextById = new Map(projectilesNextTick.map(p => [p.entityId, p]))
-
-      const useHighQualityProjectileInterpolation =
-        projectilesCurrentTick.length <= MAX_PROJECTILES_FOR_HIGH_QUALITY_INTERPOLATION
-      const projectilesPrevTick = useHighQualityProjectileInterpolation
-        ? demo.getProjectilesAtTick(Math.max(renderTick - 1, 1))
-        : []
-      const projectilesNext2Tick = useHighQualityProjectileInterpolation
-        ? demo.getProjectilesAtTick(renderTick + 2)
-        : []
-      const projectilesPrevById = new Map(projectilesPrevTick.map(p => [p.entityId, p]))
-      const projectilesNext2ById = new Map(projectilesNext2Tick.map(p => [p.entityId, p]))
-
-      projectilesThisTick = projectilesCurrentTick.map(projectile => {
-        const nextProjectile = projectilesNextById.get(projectile.entityId)
-        const prevProjectile = projectilesPrevById.get(projectile.entityId)
-        const next2Projectile = projectilesNext2ById.get(projectile.entityId)
-        return {
-          ...projectile,
-          positionPrev: prevProjectile?.position ?? projectile.position,
-          positionNext: nextProjectile?.position ?? projectile.position,
-          positionNext2:
-            next2Projectile?.position ?? nextProjectile?.position ?? projectile.position,
-          rotationNext: nextProjectile?.rotation ?? projectile.rotation,
-        }
-      })
+      }
     }
 
     return (
-      <div className="h-screen w-screen">
+      <div className="relative h-full w-full overflow-hidden">
         <Canvas
           ref={this.canvasRef}
           id="main-canvas"
@@ -821,7 +815,7 @@ class DemoViewer extends Component<DemoViewerProps> {
 
           {settings.ui.showSkybox && <Skybox map={map} />}
 
-          {/* Actors */}
+          {/* Bots */}
 
           <Suspense fallback={null}>
             <Selection>
@@ -838,13 +832,19 @@ class DemoViewer extends Component<DemoViewerProps> {
             </Selection>
           </Suspense>
 
-          {/* Projectiles */}
+          {/* Portals and test chamber elements */}
 
-          <Projectiles
-            projectiles={projectilesThisTick}
-            tick={renderTick}
-            intervalPerTick={demo?.intervalPerTick ?? 0.015}
-          />
+          {session && settings.scene.showPortals && (
+            <Portals portals={portalsThisTick} highlighted={highlightedPortals} />
+          )}
+
+          {session && settings.scene.showPuzzleElements && (
+            <PuzzleElements
+              session={session}
+              row={renderTick}
+              showLasers={settings.scene.showLasers}
+            />
+          )}
         </Canvas>
 
         {/* Normal React (non-THREE.js) UI elements */}
@@ -858,6 +858,8 @@ class DemoViewer extends Component<DemoViewerProps> {
         <div className="ui-layers" ref={this.uiLayers}>
           <DoubleTapSeek />
 
+          <MapAssetsNotice map={map} />
+
           <div className="ui-layer mb-4 items-end justify-center text-center">
             <PlaybackPanel />
           </div>
@@ -865,35 +867,25 @@ class DemoViewer extends Component<DemoViewerProps> {
           <div className="ui-layer m-4 items-start justify-end">
             <div className="flex flex-col items-end gap-2">
               {ENABLE_DEBUG_MAP_OFFSET && <MapOffsetDebugPanel />}
-              {demo && <Killfeed parser={demo} tick={playback.tick} />}
+              {session && <EventFeed session={session} tick={playback.tick} />}
             </div>
           </div>
 
-          {demo && (
+          {session && (
             <div className="ui-layer m-4 items-end justify-start">
-              <ChatHud parser={demo} tick={playback.tick} />
+              <ChatHud session={session} tick={playback.tick} />
             </div>
           )}
 
           {playersThisTick.length > 0 && (
             <div className="ui-layer items-center justify-stretch">
-              <PlayerStatuses
-                players={playersThisTick}
-                tick={playback.tick}
-                intervalPerTick={demo?.intervalPerTick ?? 0.015}
-              />
+              <PlayerStatuses session={session!} players={playersThisTick} tick={renderTick} />
             </div>
           )}
 
-          {playersThisTick.length > 0 && (
-            <FocusedPlayerLayer
-              players={playersThisTick}
-              tick={playback.tick}
-              intervalPerTick={demo?.intervalPerTick ?? 0.015}
-            />
-          )}
+          {playersThisTick.length > 0 && <FocusedPlayerLayer players={playersThisTick} />}
 
-          <PanelToolbar hasDemoLoaded={!!demo} />
+          <PanelToolbar hasSession={!!session} />
         </div>
       </div>
     )
@@ -909,72 +901,3 @@ function vector3ToTuple(vector: THREE.Vector3): [number, number, number] {
 function quaternionToTuple(quaternion: THREE.Quaternion): [number, number, number, number] {
   return [quaternion.x, quaternion.y, quaternion.z, quaternion.w]
 }
-
-//
-// ─── DATA FOR DEBUGGING ─────────────────────────────────────────────────────────
-//
-
-export const TEST_PROJECTILES = [
-  {
-    entityId: 4,
-    position: new THREE.Vector3(-100, 50, 0),
-    rotation: new THREE.Vector3(0, 0, 0),
-    teamNumber: 2,
-    type: 'stickybomb',
-  },
-  {
-    entityId: 5,
-    position: new THREE.Vector3(-100, -50, 0),
-    rotation: new THREE.Vector3(0, 0, 0),
-    teamNumber: 3,
-    type: 'stickybomb',
-  },
-  {
-    entityId: 6,
-    position: new THREE.Vector3(-100, 0, 0),
-    rotation: new THREE.Vector3(0, 0, 0),
-    teamNumber: 3,
-    type: 'rocket',
-  },
-  {
-    entityId: 7,
-    position: new THREE.Vector3(-100, 100, 0),
-    rotation: new THREE.Vector3(0, 0, 0),
-    teamNumber: 2,
-    type: 'pipebomb',
-  },
-  {
-    entityId: 8,
-    position: new THREE.Vector3(-100, -100, 0),
-    rotation: new THREE.Vector3(0, 0, 0),
-    teamNumber: 3,
-    type: 'pipebomb',
-  },
-]
-
-export const TEST_ACTORS = [
-  {
-    position: { x: 0, y: 0, z: 0 },
-    viewAngles: { x: 0, y: 0, z: 0 },
-    classId: 1,
-    health: 125,
-    team: '',
-    user: { name: 'None', entityId: 1 },
-  },
-  {
-    position: { x: 0, y: 200, z: 0 },
-    viewAngles: { x: 0, y: 0, z: 0 },
-    classId: 1,
-    health: 125,
-    team: 'red',
-    user: { name: 'Red', entityId: 2 },
-  },
-  {
-    position: { x: 0, y: -200, z: 0 },
-    viewAngles: { x: 0, y: 0, z: 0 },
-    classId: 1,
-    health: 125,
-    team: 'blue',
-    user: { name: 'Blue', entityId: 3 },
-  },
-]

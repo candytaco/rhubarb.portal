@@ -163,7 +163,7 @@ export const SettingsPanel = () => {
 
   const toggleUIPanel = () => {
     toggleUIPanelAction('About', false)
-    toggleUIPanelAction('MatchKillfeed', false)
+    toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Bookmarks', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('Settings')
@@ -305,10 +305,44 @@ export const SettingsPanel = () => {
 
           {/* ************************************************************* */}
 
-          <div className="mb-4 mt-16 text-xs font-black uppercase opacity-60">Players</div>
+          <div className="mb-4 mt-16 text-xs font-black uppercase opacity-60">Session</div>
 
           <ToggleOption
-            label="Player outlines (*expensive)"
+            label="Show portals"
+            checked={settings.scene.showPortals}
+            onChange={checked => updateSettingsOption('scene.showPortals', checked)}
+          />
+
+          <ToggleOption
+            label="Show cubes, buttons and doors"
+            checked={settings.scene.showPuzzleElements}
+            onChange={checked => updateSettingsOption('scene.showPuzzleElements', checked)}
+          />
+
+          <ToggleOption
+            label="Show lasers"
+            checked={settings.scene.showLasers}
+            onChange={checked => updateSettingsOption('scene.showLasers', checked)}
+          />
+
+          <ToggleOption
+            label="Scanner pulses on the timeline"
+            checked={settings.ui.showTtlMarkers}
+            onChange={checked => updateSettingsOption('ui.showTtlMarkers', checked)}
+          />
+
+          <ToggleOption
+            label="Console commands in the event feed"
+            checked={settings.ui.showConsoleEvents}
+            onChange={checked => updateSettingsOption('ui.showConsoleEvents', checked)}
+          />
+
+          {/* ************************************************************* */}
+
+          <div className="mb-4 mt-16 text-xs font-black uppercase opacity-60">Bots</div>
+
+          <ToggleOption
+            label="Bot outlines (*expensive)"
             keyCode="O"
             checked={settings.ui.playerOutlines}
             onChange={checked => updateSettingsOption('ui.playerOutlines', checked)}
@@ -338,10 +372,10 @@ export const SettingsPanel = () => {
               />
 
               <ToggleOption
-                label="- Class"
-                checked={settings.ui.nameplate.showClass}
+                label="- Bot"
+                checked={settings.ui.nameplate.showRole}
                 disabled={!settings.ui.nameplate.enabled}
-                onChange={checked => updateSettingsOption('ui.nameplate.showClass', checked)}
+                onChange={checked => updateSettingsOption('ui.nameplate.showRole', checked)}
               />
             </div>
           )}
@@ -352,13 +386,31 @@ export const SettingsPanel = () => {
 
           <Option label="Style">
             <div className="flex gap-1">
-              {([
-                { label: 'None', value: CrosshairStyle.NONE, icon: null },
-                { label: 'Crosshair', value: CrosshairStyle.CROSSHAIR, icon: <CrosshairStyleIcon className="h-4 w-4" /> },
-                { label: 'Cross', value: CrosshairStyle.CROSS, icon: <CrossStyleIcon className="h-4 w-4" /> },
-                { label: 'Circle', value: CrosshairStyle.CIRCLE, icon: <CircleStyleIcon className="h-4 w-4" /> },
-                { label: 'Dot', value: CrosshairStyle.DOT, icon: <DotStyleIcon className="h-4 w-4" /> },
-              ] as const).map(button => (
+              {(
+                [
+                  { label: 'None', value: CrosshairStyle.NONE, icon: null },
+                  {
+                    label: 'Crosshair',
+                    value: CrosshairStyle.CROSSHAIR,
+                    icon: <CrosshairStyleIcon className="h-4 w-4" />,
+                  },
+                  {
+                    label: 'Cross',
+                    value: CrosshairStyle.CROSS,
+                    icon: <CrossStyleIcon className="h-4 w-4" />,
+                  },
+                  {
+                    label: 'Circle',
+                    value: CrosshairStyle.CIRCLE,
+                    icon: <CircleStyleIcon className="h-4 w-4" />,
+                  },
+                  {
+                    label: 'Dot',
+                    value: CrosshairStyle.DOT,
+                    icon: <DotStyleIcon className="h-4 w-4" />,
+                  },
+                ] as const
+              ).map(button => (
                 <button
                   key={`crosshair-style-btn-${button.value}`}
                   className={cn(
@@ -402,7 +454,7 @@ export const SettingsPanel = () => {
                       className={cn(
                         'h-6 w-6 cursor-pointer rounded-full [transition:0.2s_ease_all] hover:scale-110',
                         settings.ui.crosshair.color === color
-                          ? '[border:2px_solid_white] scale-110'
+                          ? 'scale-110 [border:2px_solid_white]'
                           : '[border:2px_solid_transparent]'
                       )}
                       style={{ backgroundColor: color }}
@@ -466,12 +518,12 @@ export const SettingsPanel = () => {
           />
 
           <SliderOption
-            label="Killfeed seek buffer"
+            label="Event log seek buffer (s)"
             min={1}
             max={10}
             step={1}
-            value={settings.ui.killfeedSeekBuffer}
-            onChange={value => updateSettingsOption('ui.killfeedSeekBuffer', value)}
+            value={settings.ui.eventSeekBuffer}
+            onChange={value => updateSettingsOption('ui.eventSeekBuffer', value)}
           />
         </div>
       </TogglePanel>

@@ -15,19 +15,23 @@ const reducers = (state: StoreState, action: StoreAction) => {
     case 'PARSE_DEMO_INIT':
       return {
         ...state,
-        parser: { ...state.parser, status: 'loading', progress: 0, error: null },
+        parser: { ...state.parser, status: 'loading', progress: 0, stage: 'Reading', error: null },
       }
 
     case 'PARSE_DEMO_PROGRESS':
       return {
         ...state,
-        parser: { ...state.parser, progress: action.payload },
+        parser: {
+          ...state.parser,
+          progress: action.payload.progress,
+          stage: action.payload.stage ?? state.parser.stage,
+        },
       }
 
     case 'PARSE_DEMO_SUCCESS':
       return {
         ...state,
-        parser: { ...state.parser, status: 'done', progress: 100 },
+        parser: { ...state.parser, status: 'done', progress: 100, stage: '' },
       }
 
     case 'PARSE_DEMO_ERROR':
@@ -40,13 +44,19 @@ const reducers = (state: StoreState, action: StoreAction) => {
     // ─── SCENE ───────────────────────────────────────────────────────
     //
 
-    case 'LOAD_SCENE_FROM_PARSER':
+    case 'LOAD_SCENE':
       return {
         ...state,
         scene: action.payload.scene,
         playback: action.payload.playback,
         drawing: resetDrawingStickers(state.drawing),
         bookmarks: [],
+      }
+
+    case 'SET_MAP_ASSETS_AVAILABLE':
+      return {
+        ...state,
+        scene: { ...state.scene, mapAssetsAvailable: action.payload },
       }
 
     case 'CHANGE_CONTROLS_MODE':
@@ -349,7 +359,7 @@ const reducers = (state: StoreState, action: StoreAction) => {
           selectedStickerId:
             action.payload.kind === 'create'
               ? undefined
-              : action.payload.stickerId ?? state.drawing.selectedStickerId,
+              : (action.payload.stickerId ?? state.drawing.selectedStickerId),
           stickerDrag: {
             active: true,
             kind: action.payload.kind,

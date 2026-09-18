@@ -20,7 +20,7 @@ export const BookmarksPanel = () => {
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
     toggleUIPanelAction('About', false)
-    toggleUIPanelAction('MatchKillfeed', false)
+    toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('Bookmarks')
   }
@@ -39,9 +39,7 @@ export const BookmarksPanel = () => {
       <TogglePanel showCloseButton isOpen={isOpen} onClickClose={toggleUIPanel}>
         <div className="w-[min(280px,calc(100vw-2rem))] px-6 pb-6 pt-6">
           <div className="mb-3 mr-8 flex items-center justify-between">
-            <div className="text-sm font-semibold">
-              Bookmarks ({bookmarks.length})
-            </div>
+            <div className="text-sm font-semibold">Bookmarks ({bookmarks.length})</div>
 
             {bookmarks.length > 0 && (
               <button

@@ -61,8 +61,8 @@ export const Skybox = (props: SkyboxProps) => {
       try {
         const mapSkyboxFileUrls = getMapSkyboxUrls(props.map)
 
+        // No skybox extracted for this map yet (constants/mappings.ts)
         if (!mapSkyboxFileUrls) {
-          console.warn(`Failed to load skybox for map ${props.map}`)
           return
         }
 

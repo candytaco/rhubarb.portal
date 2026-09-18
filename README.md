@@ -1,24 +1,40 @@
+## Portal 2 Co-op Demo Replay in Browser / rhubarb.portal
 
-[![Live website](https://img.shields.io/badge/-View%20Live-%2300C7B7?logo=Netlify&style=flat-square&logoColor=white)](https://dribble.tf/)
-[![Trello board](https://img.shields.io/badge/-Trello-%230079BF?logo=trello&style=flat-square)](https://trello.com/b/u7ru88YG/dribbletf)
+View Portal 2 co-op demo files (`.dem`) directly in the browser: both bots, their portals, cubes, floor buttons, doors and lasers replayed in a 3D view, with the events of the session (portal shots and traversals, chat, console commands, pauses, level transitions, scanner pulses) on a shared timeline. A session is loaded from one player's first-person demo, or from both players' demos of the same session, which are merged on the server tick clock.
 
-## TF2 Demo Replay in Browser / [dribble.tf](https://dribble.tf/)
+The 3D viewport takes the left two thirds of a widescreen page. The right third holds the placeholders for the two players' screen recordings, which a later version plays back in sync with the demo clock.
 
-View your Team Fortress 2 STV demo files directly in the browser.
+This is a fork of [dribble.tf](https://github.com/bryjch/dribble.tf) with the Team Fortress 2 parsing, models and UI replaced. The demo parser is a TypeScript port of the Portal 2 co-op parser in [gallantlab/DemoFiles](https://github.com/gallantlab/DemoFiles) (`src/demofiles`), which follows [NeKzor/sdp](https://github.com/NeKzor/sdp) for the demo format and [UncraftedName/UntitledParser](https://github.com/UncraftedName/UntitledParser) for entity decoding. The plan, the deviations from the Python reference and the remaining work are in `specs/portal2-coop-replacement.md`.
 
-Utilizes [three.js](https://threejs.org) for browser based 3D rendering.
+### Running
 
-Models are primarily served as glTF assets.
+```
+npm install --legacy-peer-deps
+npm run dev
+```
+
+`--legacy-peer-deps` is needed because `postprocessing` declares a peer dependency on an older `three`. `npm run build` writes the production bundle to `dist/`, and `npx tsc --noEmit` typechecks the project.
+
+Drop one or two `.dem` files onto the page, or open a session by link with `/?demoUrl=<demo url>&demoUrl2=<partner demo url>&tick=<axis row>`. The About panel loads `public/samples/portal2_coop.dem`, the public co-op demo from NeKzor/sdp (MIT, see `public/samples/portal2_coop.LICENSE.txt`).
+
+### Validating the parser
+
+The parser modules run under Node without a bundler:
+
+```
+node --experimental-strip-types scripts/portal2/dump-demo.mts <demo.dem> [<partner demo.dem>]
+```
+
+The script prints the header, frame and message inventories, string tables, game events, the players and their first recorded state, and, with a partner demo, the merged server tick axis. The expected values for the public sdp demos are listed in section 6 of the spec.
+
+### Map and bot assets
+
+Map geometry is served from `public/models/maps/<map name>/` and the bot models from `public/models/players/atlas.glb` and `pbody.glb`. Neither can be produced in a cloud environment because they need the Portal 2 game files, bspsrc and Blender. Until they exist, a map is shown as the recorded positions over a grid and the bots as capsules in their team colour. Section 5 of the spec describes the conversion steps with the existing `scripts/convert-map.mjs` pipeline.
 
 ### Credits
 
-- [@dylansq](https://github.com/dylansq) - solving map models, textures, skyboxes and grinding map exports
-- [demos.tf](https://github.com/demostf/demos.tf) by [@icewind1991](https://github.com/icewind1991) - 2D viewer as basis for the project
-- [parser](https://github.com/Hona/parser) by [@Hona](https://github.com/Hona) (Rust/WASM fork of [demostf/parser](https://github.com/demostf/parser)) - parsing .dem files
-- [io_import_vmt](https://github.com/lasa01/io_import_vmf) by [@lasa01](https://github.com/lasa01) - import maps into Blender, for exporting as .gltf
+- [dribble.tf](https://github.com/bryjch/dribble.tf) by [@bryjch](https://github.com/bryjch) - the viewer this project is forked from
+- [DemoFiles](https://github.com/gallantlab/DemoFiles) - the Portal 2 co-op parser this port follows
+- [sdp](https://github.com/NeKzor/sdp) by [@NeKzor](https://github.com/NeKzor) and [UntitledParser](https://github.com/UncraftedName/UntitledParser) by [@UncraftedName](https://github.com/UncraftedName) - demo format and entity decoding references
+- [three.js](https://threejs.org) and [react-three-fiber](https://github.com/pmndrs/react-three-fiber) - 3D rendering
 - [react-canvas-draw](https://github.com/embiem/react-canvas-draw) by [embiem](https://github.com/embiem) - canvas drawing tools
-
------
-
-<img alt="dribble interface normal" src="https://github.com/bryjch/dribble.tf/assets/9291779/4b6d62ed-52bb-4302-86c2-bb9e44664d76">
-<img alt="dribble interface drawing" src="https://github.com/bryjch/dribble.tf/assets/9291779/36d990f8-d310-4f84-b5be-cfdccea70554">

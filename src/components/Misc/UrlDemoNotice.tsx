@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { UrlDemoStatus, getUrlDemoStatus, subscribeToUrlDemoStatus } from '@utils/embed'
 
 /**
- * Status overlay for a demo requested via the URL (?demo= / ?demoUrl=).
+ * Status overlay for demos requested via the URL (?demoUrl= / ?demoUrl2=).
  *
  * Kept out of the zustand store on purpose — nothing else needs to read this, and a plain
  * subscription keeps the feature self-contained.
@@ -30,18 +30,8 @@ export const UrlDemoNotice = () => {
           <>
             <div className="font-bold">Couldn't load this demo</div>
             <div className="mt-1 text-sm opacity-70">{status.message}</div>
-            {status.link && (
-              <a
-                href={status.link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block text-sm underline opacity-90 hover:opacity-100"
-              >
-                {status.link.label}
-              </a>
-            )}
             <div className="mt-2 text-xs opacity-50">
-              You can still drag a <code>.dem</code> file in to watch it.
+              You can still drag <code>.dem</code> files in to watch them.
             </div>
           </>
         )}

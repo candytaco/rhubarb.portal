@@ -8,11 +8,12 @@ import { cn } from '@utils/styling'
 export const DemoDropzone = () => {
   const [dropzoneActive, setDropzoneActive] = useState(false)
 
+  // one demo, or both players' demos of the same co-op session
   const { getRootProps, getInputProps, acceptedFiles, draggedFiles } = useDropzone({
     noClick: true,
     noKeyboard: true,
-    maxFiles: 1,
-    multiple: false,
+    maxFiles: 2,
+    multiple: true,
   })
 
   //
@@ -71,11 +72,12 @@ export const DemoDropzone = () => {
 
           <div className="relative">
             <div className="text-2xl font-black">
-              Drop <code>.dem</code> file to parse
+              Drop <code>.dem</code> file(s) to parse
             </div>
 
             <div className="mt-2 text-lg">
-              Only <span className="font-bold">STV demos</span> are supported!
+              One demo, or <span className="font-bold">both players&apos; demos</span> of the same
+              Portal 2 co-op session
             </div>
           </div>
         </div>

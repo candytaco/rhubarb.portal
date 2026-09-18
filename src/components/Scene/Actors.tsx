@@ -1,17 +1,22 @@
-import { useRef, useEffect, Suspense, useState } from 'react'
+import { useRef, useEffect, Suspense } from 'react'
 
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Select } from '@react-three/postprocessing'
 import { Html, useGLTF, Clone } from '@react-three/drei'
-import { Vector } from '@components/Analyse/Data/Types'
 
-import { HealBeam } from '@components/Scene/HealBeam'
 import { Nameplate } from '@components/Scene/Nameplate'
-import { CachedPlayer } from '@components/Analyse/Data/PlayerCache'
+import type { PlayerFrame, Vector } from '@utils/session'
 
 import { useInstance, useStore } from '@zus/store'
-import { CLASS_MAP } from '@constants/mappings'
+import {
+  BOT_MODEL_FILES,
+  EYE_HEIGHT_STANDING,
+  PLAYER_HEIGHT,
+  PLAYER_RADIUS,
+  PLAYER_ROLE_COLORS,
+  type PlayerRole,
+} from '@constants/portal2'
 import {
   objCoordsToVector3,
   cameraQuaternionFromSourceAnglesDeg,
@@ -21,55 +26,86 @@ import {
   guardedLerpProgress,
 } from '@utils/geometry'
 import { getAsset } from '@utils/misc'
-import { useEventListener } from '@utils/hooks'
 
-// Default TF2 player dimensions as specified in:
-// https://developer.valvesoftware.com/wiki/TF2/Team_Fortress_2_Mapper%27s_Reference
-export const ActorDimensions = new THREE.Vector3(49, 49, 83)
+// Bot collision hull, for camera framing and nameplates
+export const ActorDimensions = new THREE.Vector3(
+  PLAYER_RADIUS * 2,
+  PLAYER_RADIUS * 2,
+  PLAYER_HEIGHT
+)
 
-
-export const AimLineSize = 150
 const RENDER_POSITION_SMOOTH_SECONDS = 0.04
 const RENDER_ROTATION_SMOOTH_SECONDS = 0.03
-const TELEPORT_LERP_DISTANCE = 4096
-
-/**
- * Resolve view angles that may erroneously be all-zero from the parser.
- * Updates lastGoodRef when non-zero angles are found, and falls back
- * to the last known good angles when all components are zero.
- */
-function resolveViewAngles(angles: Vector, lastGoodRef: { current: Vector }): Vector {
-  if (angles.x === 0 && angles.y === 0 && angles.z === 0) {
-    return lastGoodRef.current
-  }
-  lastGoodRef.current = angles
-  return angles
-}
+const TELEPORT_LERP_DISTANCE = 512
 
 //
 // ─── PLAYER MODEL ───────────────────────────────────────────────────────────────
 //
 
 export interface PlayerModelProps {
-  team: string
-  classId: number
+  role: PlayerRole
   visible?: boolean
-  backface?: boolean
 }
 
+/**
+ * glTF bot model when one is available under public/models/players, otherwise a placeholder
+ * capsule in the role colour. The cloud environment cannot export the bot models, see
+ * specs/portal2-coop-replacement.md section 5.
+ */
 export const PlayerModel = (props: PlayerModelProps) => {
-  // Note: currently RED and BLU models are separate GLTF files.
-  // It would be awesome if we could use a single GLTF and swap the material/textures.
-  // I tried doing that but dual materials wouldn't export from Blender.
-  // The models have been hugely optimized by removing bones/animations and baking the pose,
-  // so it's no longer as huge a deal. They're are also cached by the GLTF loader.
-  const modelUrl = getAsset(`/models/players/${CLASS_MAP[props.classId]}_${props.team}.glb`)
-  const gltf = useGLTF(modelUrl, true, false)
+  const modelFile = BOT_MODEL_FILES[props.role]
+
+  if (modelFile) {
+    return (
+      <Suspense fallback={<PlaceholderBot role={props.role} visible={props.visible} />}>
+        <GltfBot url={getAsset(modelFile)} visible={props.visible} />
+      </Suspense>
+    )
+  }
+
+  return <PlaceholderBot role={props.role} visible={props.visible} />
+}
+
+const GltfBot = ({ url, visible }: { url: string; visible?: boolean }) => {
+  const gltf = useGLTF(url, true, false)
 
   return (
-    <group {...props} visible={props.visible} rotation={[Math.PI * 0.5, Math.PI * 0.5, 0]}>
+    <group visible={visible} rotation={[Math.PI * 0.5, Math.PI * 0.5, 0]}>
       <Select enabled={!!gltf.scene}>
         <Clone object={gltf.scene} />
+      </Select>
+    </group>
+  )
+}
+
+const PlaceholderBot = ({ role, visible }: { role: PlayerRole; visible?: boolean }) => {
+  const color = PLAYER_ROLE_COLORS[role]
+  const bodyLength = PLAYER_HEIGHT - PLAYER_RADIUS * 2 - 12
+
+  return (
+    <group visible={visible}>
+      <Select enabled>
+        {/* body capsule, standing along Z */}
+        <mesh
+          position={[0, 0, PLAYER_RADIUS + bodyLength * 0.5]}
+          rotation={[Math.PI / 2, 0, 0]}
+          castShadow
+        >
+          <capsuleGeometry args={[PLAYER_RADIUS, bodyLength, 6, 16]} />
+          <meshStandardMaterial color={color} roughness={0.5} metalness={0.2} />
+        </mesh>
+
+        {/* head */}
+        <mesh position={[0, 0, PLAYER_HEIGHT - 8]}>
+          <sphereGeometry args={[10, 16, 12]} />
+          <meshStandardMaterial color="#e8e8e8" roughness={0.4} metalness={0.3} />
+        </mesh>
+
+        {/* optic, facing the body yaw (+X is Source forward) */}
+        <mesh position={[9, 0, PLAYER_HEIGHT - 8]}>
+          <sphereGeometry args={[4.5, 12, 8]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} />
+        </mesh>
       </Select>
     </group>
   )
@@ -86,8 +122,8 @@ export const Actors = (props: ActorsProps) => {
 
   return (
     <group name="actors">
-      {actors.map((actor, index) => (
-        <Actor key={`actor-${index}`} {...actor} />
+      {actors.map(actor => (
+        <Actor key={`actor-${actor.frame.slot}`} {...actor} />
       ))}
     </group>
   )
@@ -97,53 +133,42 @@ export const Actors = (props: ActorsProps) => {
 // ─── ACTOR ──────────────────────────────────────────────────────────────────────
 //
 
-export type ActorProps = CachedPlayer & { positionNext: Vector; viewAnglesNext: Vector }
+export interface ActorProps {
+  frame: PlayerFrame
+  next: PlayerFrame | null
+}
 
-export const Actor = (props: ActorProps) => {
+const ZERO: Vector = { x: 0, y: 0, z: 0 }
+
+export const Actor = ({ frame, next }: ActorProps) => {
   const actorRef = useRef<THREE.Group>(null)
   const bodyRef = useRef<THREE.Group>(null)
   const playerAimRef = useRef<THREE.Group>(null)
-  const lastGoodViewAngles = useRef<Vector>({ x: 0, y: 0, z: 0 })
   const lerpedPosition = useRef(new THREE.Vector3())
   const hasPositionInit = useRef(false)
-  const staleGuard = useRef(createStaleFrameGuard(props.position))
-  const [changing, setChanging] = useState<boolean>(false)
-  const { scene } = useThree()
+  const staleGuard = useRef(createStaleFrameGuard(frame.position ?? ZERO))
 
   const playback = useStore(state => state.playback)
   const settings = useStore(state => state.settings)
   const focusedObject = useInstance(state => state.focusedObject)
 
-  const { classId, health, team, user, healTarget } = props
-  const isFocusedPOV = focusedObject?.userData?.entityId === user.entityId
-  let { position, viewAngles, positionNext, viewAnglesNext } = props
+  const { player, health, alive } = frame
+  const isFocusedPOV = focusedObject?.userData?.entityId === player.entityIndex
+  const reported = frame.position !== null
 
-  // Resolve zero-valued view angles (parser bug) by falling back to last non-zero angles
-  viewAngles = resolveViewAngles(viewAngles, lastGoodViewAngles)
-  if (viewAnglesNext.x === 0 && viewAnglesNext.y === 0 && viewAnglesNext.z === 0) {
-    viewAnglesNext = viewAngles
+  const position = frame.position ?? ZERO
+  const positionNext = next?.position ?? position
+  const eye = frame.eyePosition ?? {
+    x: position.x,
+    y: position.y,
+    z: position.z + EYE_HEIGHT_STANDING,
   }
+  const eyeNext = next?.eyePosition ?? eye
+  const viewAngles = frame.viewAngles
+  const viewAnglesNext = next?.viewAngles ?? viewAngles
 
-  const alive = health > 0
-  let color
-  if (team === 'red') color = '#ff0202'
-  if (team === 'blue') color = '#0374ff'
-
-  // Source QAngle convention (degrees): x=pitch, y=yaw, z=roll
-  const positionVec3: THREE.Vector3 = objCoordsToVector3(position)
-  const positionNextVec3: THREE.Vector3 = objCoordsToVector3(positionNext)
-  const pitchDeg = viewAngles.x
-  const yawDeg = viewAngles.y
-  const rollDeg = viewAngles.z
-  const pitchNextDeg = viewAnglesNext.x
-  const yawNextDeg = viewAnglesNext.y
-  const rollNextDeg = viewAnglesNext.z
-
-  const healTargetVec3: THREE.Vector3 | undefined = healTarget
-    ? scene
-        .getObjectByName('actors')
-        ?.children.find(({ userData }) => userData.entityId === healTarget)?.position
-    : undefined
+  const positionVec3 = objCoordsToVector3(position)
+  const positionNextVec3 = objCoordsToVector3(positionNext)
 
   useFrame((_, delta) => {
     if (!actorRef.current || !bodyRef.current || !playerAimRef.current) return
@@ -153,21 +178,37 @@ export const Actor = (props: ActorProps) => {
 
     const frameProgress = useInstance.getState().frameProgress
 
+    const setAim = (progress: number) => {
+      const eyeOffset = new THREE.Vector3(
+        eye.x - position.x + (eyeNext.x - positionNext.x - (eye.x - position.x)) * progress,
+        eye.y - position.y + (eyeNext.y - positionNext.y - (eye.y - position.y)) * progress,
+        eye.z - position.z + (eyeNext.z - positionNext.z - (eye.z - position.z)) * progress
+      )
+      playerAimRef.current!.position.copy(eyeOffset)
+    }
+
     // Skip interpolation when disabled or paused
     if (settings.scene.interpolateFrames === false || playback.playing === false) {
       actorRef.current.position.set(position.x, position.y, position.z)
       hasPositionInit.current = true
-      bodyRef.current.quaternion.copy(yawQuaternionFromDegrees(yawDeg))
-      playerAimRef.current.position.set(0, 0, ActorDimensions.z)
+      bodyRef.current.quaternion.copy(yawQuaternionFromDegrees(viewAngles.y))
+      setAim(0)
       playerAimRef.current.quaternion.copy(
-        cameraQuaternionFromSourceAnglesDeg({ pitch: pitchDeg, yaw: yawDeg, roll: rollDeg })
+        cameraQuaternionFromSourceAnglesDeg({
+          pitch: viewAngles.x,
+          yaw: viewAngles.y,
+          roll: viewAngles.z,
+        })
       )
       guardedLerpProgress(staleGuard.current, frameProgress, position, false)
       return
     }
 
     const lerpProgress = guardedLerpProgress(
-      staleGuard.current, frameProgress, position, playback.playing
+      staleGuard.current,
+      frameProgress,
+      position,
+      playback.playing
     )
     const didTeleport = positionVec3.distanceTo(positionNextVec3) > TELEPORT_LERP_DISTANCE
     const wasInitialized = hasPositionInit.current
@@ -187,29 +228,30 @@ export const Actor = (props: ActorProps) => {
       actorRef.current.position.lerp(lerpedPosition.current, positionBlend)
     }
     hasPositionInit.current = true
+    setAim(didTeleport ? 0 : lerpProgress)
 
     // Body: yaw-only quaternion
-    const bodyTarget = yawQuaternionFromDegrees(yawDeg)
+    const bodyTarget = yawQuaternionFromDegrees(viewAngles.y)
       .clone()
-      .slerp(yawQuaternionFromDegrees(yawNextDeg), lerpProgress)
+      .slerp(yawQuaternionFromDegrees(viewAnglesNext.y), lerpProgress)
     if (didTeleport || !wasInitialized) {
       bodyRef.current.quaternion.copy(bodyTarget)
     } else {
       bodyRef.current.quaternion.slerp(bodyTarget, rotationBlend)
     }
 
-    // Aim/camera: full view angles
+    // Aim/camera: full view angles including the roll through portals
     const camTarget = cameraQuaternionFromSourceAnglesDeg({
-      pitch: pitchDeg,
-      yaw: yawDeg,
-      roll: rollDeg,
+      pitch: viewAngles.x,
+      yaw: viewAngles.y,
+      roll: viewAngles.z,
     })
       .clone()
       .slerp(
         cameraQuaternionFromSourceAnglesDeg({
-          pitch: pitchNextDeg,
-          yaw: yawNextDeg,
-          roll: rollNextDeg,
+          pitch: viewAnglesNext.x,
+          yaw: viewAnglesNext.y,
+          roll: viewAnglesNext.z,
         }),
         lerpProgress
       )
@@ -220,45 +262,29 @@ export const Actor = (props: ActorProps) => {
     }
   })
 
-  // Kinda hacky solution to fix player models not updating when they change class,
-  // which is due to how PlayerModel handles caching of loaded GLTF models. So this
-  // solution relies of quickly remounting the PlayerModel with the updated team/classId
-  // values. It doesn't appear to trigger any network refetches, so this should be ok
-  useEffect(() => {
-    setChanging(true)
-    const timer = setTimeout(() => setChanging(false), 10)
-    return () => clearTimeout(timer)
-  }, [team, classId])
-
   return (
-    <group name="actor" ref={actorRef} userData={user}>
-      {/* Player model */}
+    <group
+      name="actor"
+      ref={actorRef}
+      visible={reported}
+      userData={{
+        slot: player.slot,
+        entityId: player.entityIndex,
+        name: player.name,
+        role: player.role,
+      }}
+    >
+      {/* Bot model */}
 
       <group name="playerBody" ref={bodyRef}>
-        <Suspense fallback={null}>
-          {team && classId && !changing ? (
-            <PlayerModel visible={alive && !isFocusedPOV} team={team} classId={classId} />
-          ) : null}
-        </Suspense>
+        <PlayerModel visible={alive && !isFocusedPOV} role={player.role} />
       </group>
 
-      {/* Player aim */}
+      {/* Eye: POV camera */}
 
-      <group ref={playerAimRef} name="playerAim" position={[0, 0, ActorDimensions.z]}>
-        {/* Aim line (debugging) */}
-        {/* <mesh visible={alive} position={[AimLineSize * 0.5, 0, 0]}>
-          <boxGeometry attach="geometry" args={[AimLineSize, 5, 5]} />
-          <meshBasicMaterial attach="material" color={color} opacity={0.5} transparent />
-        </mesh> */}
-
+      <group ref={playerAimRef} name="playerAim" position={[0, 0, EYE_HEIGHT_STANDING]}>
         <POVCamera />
       </group>
-
-      {/* Medic heal beam */}
-
-      {healTargetVec3 && (
-        <HealBeam origin={positionVec3} target={healTargetVec3} color={color} />
-      )}
 
       {/* Nameplate */}
 
@@ -267,14 +293,13 @@ export const Actor = (props: ActorProps) => {
           name="html"
           className="pointer-events-none select-none"
           style={{ bottom: 0, transform: 'translateX(-50%)', textAlign: 'center' }}
-          position={[0, 0, ActorDimensions.z * 0.85]}
+          position={[0, 0, PLAYER_HEIGHT * 0.95]}
         >
-          {alive && (
+          {alive && reported && (
             <Nameplate
-              name={user.name}
-              team={team}
+              name={player.name}
+              role={player.role}
               health={health}
-              classId={classId}
               settings={settings.ui.nameplate}
             />
           )}
@@ -284,21 +309,17 @@ export const Actor = (props: ActorProps) => {
   )
 }
 
-export interface POVCameraProps {}
-
-export const POVCamera = ({}: POVCameraProps) => {
+export const POVCamera = () => {
   const ref = useRef<THREE.PerspectiveCamera>(null)
 
   const settings = useStore(state => state.settings)
+  const size = useThree(state => state.size)
 
-  const updateCamera = () => {
+  useEffect(() => {
     if (!ref.current) return
-    ref.current.aspect = window.innerWidth / window.innerHeight
+    ref.current.aspect = size.width / Math.max(size.height, 1)
     ref.current.updateProjectionMatrix()
-  }
-
-  useEffect(updateCamera, [settings])
-  useEventListener('resize', updateCamera, window)
+  }, [settings, size])
 
   return (
     <perspectiveCamera

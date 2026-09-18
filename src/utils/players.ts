@@ -1,23 +1,19 @@
-import { CachedPlayer } from '@components/Analyse/Data/PlayerCache'
+import type { PlayerFrame } from './session'
 
-import { CLASS_ORDER_MAP, HEALTH_MAP } from '@constants/mappings'
-
-/*
- * Function to sort Players based on classId descending.
- * (i.e. scout, soldier, ... , sniper, spy)
- */
-
-export const sortPlayersByClassId = (a: CachedPlayer, b: CachedPlayer) => {
-  return CLASS_ORDER_MAP[a.classId] < CLASS_ORDER_MAP[b.classId] ? -1 : 1
-}
+// Both bots have 100 health
+export const PLAYER_MAX_HEALTH = 100
 
 /*
- * Return health information for a given class.
+ * Sort player frames by slot (blue bot first when the slots follow the entity order)
  */
+export const sortPlayersBySlot = (a: PlayerFrame, b: PlayerFrame) => a.slot - b.slot
 
-export const parseClassHealth = (classId: number, health: number) => {
+/*
+ * Return health information for a player.
+ */
+export const parseHealth = (health: number) => {
   const current = health
-  const max = HEALTH_MAP[classId] || 100
+  const max = PLAYER_MAX_HEALTH
   const ratio = current / max
   const percentage = ratio * 100
 

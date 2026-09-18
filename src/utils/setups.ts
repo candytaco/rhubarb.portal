@@ -3,8 +3,8 @@ import {
   SavedSetupCamera,
   SETUP_STORAGE_VERSION,
   StickerAnnotation,
+  StickerRole,
   StickerSymbol,
-  StickerTeam,
 } from '@constants/types'
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
 
@@ -15,7 +15,7 @@ type CameraWire =
   | ['s', [number, number, number], [number, number, number, number]]
 
 type StickerWire =
-  | ['c', number, 'r' | 'b', [number, number, number]]
+  | ['p', 'b' | 'o', [number, number, number]]
   | ['s', string, [number, number, number]]
 
 type SharedSetupPayload = {
@@ -26,16 +26,16 @@ type SharedSetupPayload = {
   s: StickerWire[]
 }
 
-type SupportedStickerSymbol = typeof StickerSymbol[keyof typeof StickerSymbol]
+type SupportedStickerSymbol = (typeof StickerSymbol)[keyof typeof StickerSymbol]
 
-const TEAM_TO_CODE: Record<StickerTeam, 'r' | 'b'> = {
-  red: 'r',
+const ROLE_TO_CODE: Record<StickerRole, 'b' | 'o'> = {
   blue: 'b',
+  orange: 'o',
 }
 
-const CODE_TO_TEAM: Record<'r' | 'b', StickerTeam> = {
-  r: 'red',
+const CODE_TO_ROLE: Record<'b' | 'o', StickerRole> = {
   b: 'blue',
+  o: 'orange',
 }
 
 const SYMBOL_TO_CODE: Record<string, string> = {
@@ -150,14 +150,15 @@ export function deserializeSetupFromShareToken(token: string): SavedSetup | null
   }
 }
 
+/**
+ * Setups saved by the TF2 build (version 1, class stickers) are dropped
+ */
 export function normalizeStoredSetups(rawValue: unknown): SavedSetup[] {
   if (!Array.isArray(rawValue)) {
     return []
   }
 
-  return rawValue
-    .map(normalizeStoredSetup)
-    .filter((setup): setup is SavedSetup => setup !== null)
+  return rawValue.map(normalizeStoredSetup).filter((setup): setup is SavedSetup => setup !== null)
 }
 
 function normalizeStoredSetup(rawValue: unknown): SavedSetup | null {
@@ -237,19 +238,15 @@ function normalizeStoredSticker(rawValue: unknown): StickerAnnotation | null {
     return null
   }
 
-  if (candidate.kind === 'class') {
-    if (
-      typeof candidate.classId !== 'number' ||
-      (candidate.team !== 'red' && candidate.team !== 'blue')
-    ) {
+  if (candidate.kind === 'player') {
+    if (candidate.role !== 'blue' && candidate.role !== 'orange') {
       return null
     }
 
     return {
       id: isNonEmptyString(candidate.id) ? candidate.id : createSetupId(),
-      kind: 'class',
-      classId: candidate.classId,
-      team: candidate.team,
+      kind: 'player',
+      role: candidate.role,
       position: [...candidate.position] as [number, number, number],
     }
   }
@@ -313,11 +310,10 @@ function decodeCamera(rawValue: unknown): SavedSetupCamera | null {
 }
 
 function encodeSticker(sticker: StickerAnnotation): StickerWire {
-  if (sticker.kind === 'class') {
+  if (sticker.kind === 'player') {
     return [
-      'c',
-      sticker.classId,
-      TEAM_TO_CODE[sticker.team],
+      'p',
+      ROLE_TO_CODE[sticker.role],
       roundTuple(sticker.position, 1, 3) as [number, number, number],
     ]
   }
@@ -335,17 +331,15 @@ function decodeSticker(rawValue: unknown): StickerAnnotation | null {
   }
 
   if (
-    rawValue[0] === 'c' &&
-    typeof rawValue[1] === 'number' &&
-    (rawValue[2] === 'r' || rawValue[2] === 'b') &&
-    isNumberTuple(rawValue[3], 3)
+    rawValue[0] === 'p' &&
+    (rawValue[1] === 'b' || rawValue[1] === 'o') &&
+    isNumberTuple(rawValue[2], 3)
   ) {
     return {
       id: createSetupId(),
-      kind: 'class',
-      classId: rawValue[1],
-      team: CODE_TO_TEAM[rawValue[2] as 'r' | 'b'],
-      position: [...rawValue[3]] as [number, number, number],
+      kind: 'player',
+      role: CODE_TO_ROLE[rawValue[1] as 'b' | 'o'],
+      position: [...rawValue[2]] as [number, number, number],
     }
   }
 
@@ -376,7 +370,9 @@ function roundNumber(value: number, decimals: number): number {
 }
 
 function isNumberTuple(value: unknown, size: number): value is number[] {
-  return Array.isArray(value) && value.length === size && value.every(item => typeof item === 'number')
+  return (
+    Array.isArray(value) && value.length === size && value.every(item => typeof item === 'number')
+  )
 }
 
 function isNonEmptyString(value: unknown): value is string {
