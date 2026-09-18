@@ -454,6 +454,20 @@ export class Portal2DemoFileParser extends DemofileParser implements EntityTimeS
     }
   }
 
+  /** Skybox name from the server info, or null when no server info carries one */
+  getSkyName(): string | null {
+    for (const frame of this.frames) {
+      if (frame.command === this.commandSet.Signon || frame.command === this.commandSet.Packet) {
+        for (const message of frame.packets) {
+          if (message instanceof SvcServerInfo) {
+            return message.skyName || null
+          }
+        }
+      }
+    }
+    return null
+  }
+
   /** Entity index of the player recording the demo, from the server info player slot or the first SvcSetView */
   getLocalPlayerEntityIndex(): number | null {
     for (const frame of this.frames) {

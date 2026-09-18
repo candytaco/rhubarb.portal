@@ -42,8 +42,8 @@ export const FLOOR_BUTTON_RADIUS = 40
 // glTF bot models, served from public/models/players when present. The cloud environment cannot
 // export them (see specs/portal2-coop-replacement.md section 5); null renders the placeholder.
 export const BOT_MODEL_FILES: Record<PlayerRole, string | null> = {
-  blue: null, // '/models/players/atlas.glb'
-  orange: null, // '/models/players/pbody.glb'
+  blue: '/models/players/atlas.glb',
+  orange: '/models/players/pbody.glb',
   unknown: null,
 }
 

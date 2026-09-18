@@ -6,6 +6,7 @@ import { getMapSkyboxUrls } from '@utils/game'
 
 export interface SkyboxProps {
   map: string
+  skyName: string
 }
 
 export const Skybox = (props: SkyboxProps) => {
@@ -59,9 +60,9 @@ export const Skybox = (props: SkyboxProps) => {
 
     const loadSkybox = async () => {
       try {
-        const mapSkyboxFileUrls = getMapSkyboxUrls(props.map)
+        const mapSkyboxFileUrls = getMapSkyboxUrls(props.skyName)
 
-        // No skybox extracted for this map yet (constants/mappings.ts)
+        // The demo carries no skyName, so there is no skybox folder to load
         if (!mapSkyboxFileUrls) {
           return
         }
@@ -142,7 +143,7 @@ export const Skybox = (props: SkyboxProps) => {
       if (skyboxTexture) skyboxTexture.dispose()
       if (pmrem) pmrem.dispose()
     }
-  }, [props.map, scene, gl])
+  }, [props.map, props.skyName, scene, gl])
 
   return null
 }

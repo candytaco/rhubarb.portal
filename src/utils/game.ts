@@ -1,5 +1,4 @@
 import { getAsset } from './misc'
-import { MAP_SKYBOX_MAP } from '@constants/mappings'
 import type { MapBoundaries } from '@utils/scene'
 
 // Map assets live under public/models/maps/<map name>/; every co-op map maps to its own folder.
@@ -66,16 +65,16 @@ export const fetchMapWorldBounds = async (
   }
 }
 
-export const getMapSkyboxUrls = (loadedMapName: string): MapSkyboxTypes | undefined => {
-  const skyboxname = MAP_SKYBOX_MAP[loadedMapName]
-  if (!skyboxname) return undefined
+// Skybox folders under public/models/skybox are named after the SvcServerInfo skyName of the demo.
+export const getMapSkyboxUrls = (skyName: string): MapSkyboxTypes | undefined => {
+  if (!skyName) return undefined
 
   return {
-    lf: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_lf.png`),
-    rt: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_rt.png`),
-    ft: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_ft.png`),
-    bk: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_bk.png`),
-    dn: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_dn.png`),
-    up: getAsset(`/models/skybox/${skyboxname}/${skyboxname}_up.png`),
+    lf: getAsset(`/models/skybox/${skyName}/${skyName}_lf.png`),
+    rt: getAsset(`/models/skybox/${skyName}/${skyName}_rt.png`),
+    ft: getAsset(`/models/skybox/${skyName}/${skyName}_ft.png`),
+    bk: getAsset(`/models/skybox/${skyName}/${skyName}_bk.png`),
+    dn: getAsset(`/models/skybox/${skyName}/${skyName}_dn.png`),
+    up: getAsset(`/models/skybox/${skyName}/${skyName}_up.png`),
   }
 }

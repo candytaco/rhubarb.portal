@@ -376,6 +376,7 @@ export function buildSession(
   const session: Portal2Session = {
     kind: coop ? 'coop' : 'single',
     map: parsers[0].mapName ?? 'unknown',
+    skyName: parsers[0].getSkyName() ?? '',
     intervalPerTick: 1 / 60,
     tickAxis,
     players,

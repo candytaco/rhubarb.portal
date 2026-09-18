@@ -102,6 +102,7 @@ export interface SessionPerformance {
 export interface Portal2Session {
   kind: SessionKind
   map: string
+  skyName: string
   intervalPerTick: number
   tickAxis: Int32Array
   players: SessionPlayer[]

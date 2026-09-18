@@ -55,7 +55,10 @@ def main():
                 break
 
     if matched_path is None:
-        # Not found — exit silently (caller checks for output file existence)
+        print('No matched paths')
+        for path in pak:
+            if 'maps' in path:
+            	print(path)
         sys.exit(0)
 
     output_path = os.path.join(output_dir, relative_path)

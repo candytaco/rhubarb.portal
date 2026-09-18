@@ -24,7 +24,7 @@ import { PORTAL2_COOP_MAPS } from '@constants/portal2'
 
 const GITHUB_URL = 'https://github.com/candytaco/rhubarb.portal'
 const DEMOFILES_URL = 'https://github.com/gallantlab/DemoFiles'
-const SAMPLE_DEMO = 'portal2_coop.dem'
+const SAMPLE_DEMOS = ['test player 1.dem', 'test player 2.dem']
 
 export const AboutPanel = () => {
   const isOpen = useStore(state => state.ui.activePanels.includes('About'))
@@ -54,23 +54,29 @@ export const AboutPanel = () => {
   }
 
   const onClickSampleDemo = async () => {
-    const url = getAsset(`/samples/${SAMPLE_DEMO}`)
+    const sampleDemoFiles = await Promise.all(
+      SAMPLE_DEMOS.map(async name => {
+        const url = getAsset(`/samples/${encodeURIComponent(name)}`)
 
-    await addDownloadAction({ type: 'demo', url, name: SAMPLE_DEMO })
+        await addDownloadAction({ type: 'demo', url, name })
 
-    const fileBuffer: ArrayBuffer = await axios
-      .get(url, {
-        responseType: 'arraybuffer',
-        onDownloadProgress: event => {
-          updateDownloadAction(url, {
-            progress: event.progress ? event.progress * 100 : 0,
-            size: event.total,
+        const fileBuffer: ArrayBuffer = await axios
+          .get(url, {
+            responseType: 'arraybuffer',
+            onDownloadProgress: event => {
+              updateDownloadAction(url, {
+                progress: event.progress ? event.progress * 100 : 0,
+                size: event.total,
+              })
+            },
           })
-        },
-      })
-      .then(res => res.data)
+          .then(res => res.data)
 
-    await parseDemoAction([{ name: SAMPLE_DEMO, buffer: fileBuffer }])
+        return { name, buffer: fileBuffer }
+      })
+    )
+
+    await parseDemoAction(sampleDemoFiles)
     goToTickAction(600)
   }
 
@@ -154,7 +160,7 @@ export const AboutPanel = () => {
               className="flex cursor-pointer items-center rounded-full bg-pp-accent-tertiary px-3.5 py-1 font-medium tracking-wide transition-all hover:bg-white hover:text-pp-accent-tertiary"
               onClick={onClickSampleDemo}
             >
-              Load sample demo
+              Load sample demos
             </button>
             {/* Spacer to make button look more balanced */}
             <div className="w-4" />

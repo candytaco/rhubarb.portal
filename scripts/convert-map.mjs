@@ -196,6 +196,20 @@ const readVmfMaterialReferences = vmfPath => {
 }
 
 /**
+ * Portal 2 entities the viewer instantiates and animates from demo data.  The
+ * map export must not contain them, otherwise each one is drawn twice: once by
+ * the viewer at its demo position, once by the map at its spawn pose.
+ */
+const demoDrivenPortal2Classnames = new Set([
+  'prop_weighted_cube',
+  'prop_floor_button',
+  'prop_floor_cube_button',
+  'prop_floor_ball_button',
+  'prop_testchamber_door',
+  'npc_portal_turret_floor',
+])
+
+/**
  * Pre-filter a decompiled VMF to strip brush entities that should be invisible
  * at runtime according to Source engine rules.  Plumber imports ALL brush
  * entities (including func_brush, triggers) when vmf_import_brushes=True, but
@@ -207,6 +221,12 @@ const readVmfMaterialReferences = vmfPath => {
  *  - trigger_* entities  (always EF_NODRAW in engine)
  *  - func_occluder       (visibility helper, not rendered)
  *  - func_areaportal     (visibility helper, not rendered)
+ *  - Portal 2 props the viewer draws from the demo (cubes, floor buttons,
+ *    test chamber doors, floor turrets)
+ *
+ * Moving parts the demo does not track (func_movelinear, func_door,
+ * func_tracktrain, func_platrotating and the panel arms) are kept, and render
+ * at their spawn pose.
  *
  * The filtered VMF is written next to the original with a `_filtered` suffix.
  * Returns the path to the filtered file.
@@ -276,6 +296,14 @@ const filterVmfInvisibleEntities = vmfPath => {
 
     // func_occluder / func_areaportal are visibility helpers, not rendered
     if (cn === 'func_occluder' || cn === 'func_areaportal') {
+      keep[i] = 0
+      removed++
+      removedClassnames[cn] = (removedClassnames[cn] || 0) + 1
+      continue
+    }
+
+    // Portal 2 props the viewer draws from demo data at their tracked position
+    if (demoDrivenPortal2Classnames.has(cn)) {
       keep[i] = 0
       removed++
       removedClassnames[cn] = (removedClassnames[cn] || 0) + 1
@@ -1136,6 +1164,21 @@ const convertVtf = (vtfPath, outputDir, format = 'tga') => {
   runCommand('python3', [convertVtfScript, '--file', vtfPath, '--output', outputDir, '--format', format])
 }
 
+/**
+ * Find the available ImageMagick command.  Version 7 installs a `magick`
+ * front-end, while version 6 only provides `convert`.
+ * @returns {string} Command name to invoke ImageMagick with
+ */
+const resolveImageMagickCommand = () => {
+  for (const candidate of ['magick', 'convert']) {
+    const result = spawnSync(candidate, ['-version'], { stdio: 'ignore' })
+    if (result.status === 0) return candidate
+  }
+  return 'magick'
+}
+
+const imageMagickCommand = resolveImageMagickCommand()
+
 // ── CLI arguments ──
 // Resolve map name and BSP path.  Supports two modes:
 //   1. Positional:  bun convert:map ./path/to/cp_granary
@@ -1143,6 +1186,8 @@ const convertVtf = (vtfPath, outputDir, format = 'tga') => {
 //      - If path is a directory, find the first .bsp inside it.
 //      - Map name is derived from the .bsp filename (without extension).
 //   2. Legacy flags: --map <name> --bsp-path <path>
+//   3. Map name only: --map <name>
+//      - The BSP is read from <game-dir>/maps/<name>.bsp.
 let mapName = getArg('map', null)
 let bspPathArg = getArg('bsp-path', null)
 
@@ -1172,12 +1217,23 @@ if (!mapName && !bspPathArg && positional.length > 0) {
 if (!mapName) {
   throw new Error('Missing map name. Usage: bun convert:map ./path/to/map_dir  (or --map <name> --bsp-path <path>)')
 }
+const gameDir = requireArg('game-dir')
+
+// 3. Map name only: resolve the BSP from the game's own map directory.
 if (!bspPathArg) {
-  throw new Error('Missing BSP path. Usage: bun convert:map ./path/to/map_dir  (or --map <name> --bsp-path <path>)')
+  const gameMapsDir = path.join(gameDir, 'maps')
+  const gameMapBspPath = path.join(gameMapsDir, `${mapName}.bsp`)
+  if (!fs.existsSync(gameMapBspPath)) {
+    throw new Error(
+      `Missing BSP path, and ${mapName}.bsp was not found in ${gameMapsDir}. ` +
+        'Usage: bun convert:map ./path/to/map_dir  (or --map <name> --bsp-path <path>)'
+    )
+  }
+  bspPathArg = gameMapBspPath
+  console.log(`Resolved BSP from game dir: ${bspPathArg}`)
 }
 const bspsrcDir = requireArg('bspsrc')
 const blenderPath = requireArg('blender')
-const gameDir = requireArg('game-dir')
 const gltfpackArg = getArg('gltfpack', null)
 // Default to an 8x8 chunk grid: dense enough to make BSP/PVS metadata useful,
 // but not so fine-grained that chunk count overwhelms draw-call reduction.
@@ -2231,7 +2287,7 @@ if (!skipSkybox) {
         )
         if (info?.color) {
           const color = info.color
-          runCommand('magick', [
+          runCommand(imageMagickCommand, [
             '-size',
             '1x1',
             `xc:rgb(${color[0]},${color[1]},${color[2]})`,
@@ -2269,7 +2325,7 @@ if (!skipSkybox) {
           magickArgs.push('-quality', '92')
         }
         magickArgs.push(skyboxImagePath)
-        runCommand('magick', magickArgs)
+        runCommand(imageMagickCommand, magickArgs)
       }
     }
   } catch (error) {

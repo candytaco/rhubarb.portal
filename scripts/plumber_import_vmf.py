@@ -853,7 +853,7 @@ def main():
     search_paths = build_search_paths(
         args.game_dir, args.hl2_dir, extra_paths + asset_paths + derived_asset_paths
     )
-    fs = GameFileSystem.from_search_paths("TF2", search_paths)
+    fs = GameFileSystem.from_search_paths("PORTAL 2", search_paths)
     dir_paths = [path for kind, path in search_paths if kind == "DIR"]
 
     map_name = get_map_name_from_bsp(args.bsp) or get_map_name_from_vmf(args.vmf)

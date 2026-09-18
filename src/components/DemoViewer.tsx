@@ -813,7 +813,7 @@ class DemoViewer extends Component<DemoViewerProps> {
 
           {/* Skybox */}
 
-          {settings.ui.showSkybox && <Skybox map={map} />}
+          {settings.ui.showSkybox && <Skybox map={map} skyName={session?.skyName ?? ''} />}
 
           {/* Bots */}
 

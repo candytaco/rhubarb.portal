@@ -205,12 +205,17 @@ if (blenderFound) {
 }
 
 // ── 6. ImageMagick ──
+// Version 7 installs a `magick` front-end, version 6 only provides `convert`.
+// convert-map.mjs accepts either.
 console.log('ImageMagick:')
-const magickVersion = checkCommand('magick')
-if (magickVersion) {
-  ok(`Found: ${magickVersion}`)
+const magickCommand = ['magick', 'convert']
+  .map(candidate => ({ command: candidate, version: checkCommand(candidate, '-version') }))
+  .find(candidate => candidate.version && candidate.version.includes('ImageMagick'))
+
+if (magickCommand) {
+  ok(`Found: ${magickCommand.version} (${magickCommand.command})`)
 } else {
-  warn('ImageMagick (magick) not found. Needed for skybox color fallbacks. Install with: brew install imagemagick')
+  warn('ImageMagick not found. Needed for skybox conversion and color fallbacks. Install with: brew install imagemagick (macOS) or apt install imagemagick (Linux)')
 }
 
 // ── 7. BSPSource ──
@@ -256,44 +261,71 @@ if (fs.existsSync(bspsrcJar) || fs.existsSync(bspsrcSh)) {
 }
 
 // ── 8. gltfpack ──
+// The repository ships a macOS arm64 build as scripts/tools/gltfpack/gltfpack.
+// On every other platform the matching meshoptimizer release is downloaded to a
+// platform-suffixed name, so the checked-in binary stays intact.
 console.log('gltfpack:')
 const gltfpackDir = path.join(repoRoot, 'scripts', 'tools', 'gltfpack')
-const gltfpackPath = path.join(gltfpackDir, 'gltfpack')
 
-if (fs.existsSync(gltfpackPath)) {
-  const version = checkCommand(gltfpackPath)
-  ok(`Found: ${version || 'unknown version'} at ${gltfpackPath}`)
+const gltfpackReleaseAssets = {
+  darwin: process.arch === 'x64' ? 'gltfpack-macos-intel.zip' : 'gltfpack-macos.zip',
+  linux: 'gltfpack-ubuntu.zip',
+  win32: 'gltfpack-windows.zip',
+}
+const gltfpackPlatformSuffixes = { darwin: 'macos', linux: 'linux', win32: 'windows' }
+
+const gltfpackReleaseAsset = gltfpackReleaseAssets[process.platform]
+const gltfpackPlatformSuffix = gltfpackPlatformSuffixes[process.platform]
+const gltfpackBinaryName = process.platform === 'win32' ? 'gltfpack.exe' : 'gltfpack'
+const gltfpackPlatformPath = gltfpackPlatformSuffix
+  ? path.join(gltfpackDir, `gltfpack-${gltfpackPlatformSuffix}${process.platform === 'win32' ? '.exe' : ''}`)
+  : null
+const gltfpackPath = path.join(gltfpackDir, gltfpackBinaryName)
+
+// A binary for another platform exists as a file but cannot be executed, so the
+// version probe is what decides whether it is usable here.
+const runnableGltfpack = [gltfpackPlatformPath, gltfpackPath]
+  .filter(candidate => candidate && fs.existsSync(candidate))
+  .map(candidate => ({ path: candidate, version: checkCommand(candidate, '-v') }))
+  .find(candidate => candidate.version && candidate.version.toLowerCase().startsWith('gltfpack'))
+
+if (runnableGltfpack) {
+  ok(`Found: ${runnableGltfpack.version} at ${runnableGltfpack.path}`)
+  warn(`Set "gltfpack" in scripts/convert-config.json to ${runnableGltfpack.path}`)
+} else if (!gltfpackReleaseAsset) {
+  warn(`No gltfpack release build for platform ${process.platform}. Build it from https://github.com/zeux/meshoptimizer`)
 } else {
-  warn('gltfpack not found locally. Attempting to download...')
-  // Detect architecture for correct binary
-  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  const gltfpackRelease = 'v0.22'
-  const binaryName = arch === 'arm64' ? 'gltfpack-macos-arm64' : 'gltfpack-macos-x64'
-  const gltfpackUrl = `https://github.com/nicedoc/gltfpack/releases/download/${gltfpackRelease}/${binaryName}`
-  // Alternative: official meshoptimizer releases
-  const meshoptUrl = `https://github.com/zeux/meshoptimizer/releases/latest/download/gltfpack-${process.platform === 'darwin' ? 'macos' : 'linux'}.zip`
+  warn(`No gltfpack build for ${process.platform} found locally. Attempting to download...`)
+  const meshoptUrl = `https://github.com/zeux/meshoptimizer/releases/latest/download/${gltfpackReleaseAsset}`
 
   try {
     fs.mkdirSync(gltfpackDir, { recursive: true })
-    console.log(`  Downloading gltfpack from meshoptimizer releases...`)
-    const zipPath = path.join(gltfpackDir, 'gltfpack.zip')
+    console.log(`  Downloading ${gltfpackReleaseAsset} from meshoptimizer releases...`)
+    const zipPath = path.join(gltfpackDir, gltfpackReleaseAsset)
     await downloadFile(meshoptUrl, zipPath)
-    execSync(`unzip -o "${zipPath}" -d "${gltfpackDir}"`, { stdio: 'inherit' })
+
+    // Extract to a scratch directory so the archive cannot overwrite a binary
+    // belonging to another platform.
+    const extractDir = path.join(gltfpackDir, 'download')
+    fs.rmSync(extractDir, { recursive: true, force: true })
+    fs.mkdirSync(extractDir, { recursive: true })
+    execSync(`unzip -o "${zipPath}" -d "${extractDir}"`, { stdio: 'inherit' })
     fs.unlinkSync(zipPath)
 
-    if (fs.existsSync(gltfpackPath)) {
-      fs.chmodSync(gltfpackPath, 0o755)
-      ok('gltfpack downloaded and installed.')
+    const extractedBinary = fs
+      .readdirSync(extractDir)
+      .map(name => path.join(extractDir, name))
+      .find(candidate => path.basename(candidate).toLowerCase().startsWith('gltfpack'))
+
+    if (extractedBinary) {
+      fs.renameSync(extractedBinary, gltfpackPlatformPath)
+      fs.chmodSync(gltfpackPlatformPath, 0o755)
+      fs.rmSync(extractDir, { recursive: true, force: true })
+      const version = checkCommand(gltfpackPlatformPath, '-v')
+      ok(`gltfpack installed: ${version || 'unknown version'} at ${gltfpackPlatformPath}`)
+      warn(`Set "gltfpack" in scripts/convert-config.json to ${gltfpackPlatformPath}`)
     } else {
-      // The zip might contain a differently named binary
-      const binaries = fs.readdirSync(gltfpackDir).filter(f => f.startsWith('gltfpack'))
-      if (binaries.length > 0 && binaries[0] !== 'gltfpack') {
-        fs.renameSync(path.join(gltfpackDir, binaries[0]), gltfpackPath)
-        fs.chmodSync(gltfpackPath, 0o755)
-        ok('gltfpack downloaded and installed.')
-      } else {
-        warn('gltfpack downloaded but binary not found at expected path.')
-      }
+      warn(`gltfpack downloaded but no binary was found in ${extractDir}`)
     }
   } catch (err) {
     warn(`gltfpack download failed: ${err.message}. Download manually from https://github.com/zeux/meshoptimizer/releases`)
