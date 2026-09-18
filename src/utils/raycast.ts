@@ -18,8 +18,11 @@ export function getWorldIntersectionFromScreen({
     return null
   }
 
-  const world = scene.getObjectByName('world')
-  if (!world) return null
+  // the converted map, or the fallback ground shown while a map has no assets
+  const targets = ['world', 'worldFallback']
+    .map(name => scene.getObjectByName(name))
+    .filter((object): object is THREE.Object3D => object !== undefined)
+  if (targets.length === 0) return null
 
   const pointer = new THREE.Vector2(
     ((screenX - rect.left) / rect.width) * 2 - 1,
@@ -29,7 +32,7 @@ export function getWorldIntersectionFromScreen({
   const raycaster = new THREE.Raycaster()
   raycaster.setFromCamera(pointer, camera)
 
-  const intersections = raycaster.intersectObject(world, true)
+  const intersections = raycaster.intersectObjects(targets, true)
   const hit = intersections.find(intersection => intersection.object.visible)
 
   return hit ? hit.point.clone() : null

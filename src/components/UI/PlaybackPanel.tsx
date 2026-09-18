@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import * as Slider from '@radix-ui/react-slider'
 import { motion } from 'framer-motion'
@@ -28,10 +28,6 @@ import { focusMainCanvas } from '@utils/misc'
 import { cn } from '@utils/styling'
 import { getDurationFromTicks } from '@utils/parser'
 import { useIsMobile } from '@utils/hooks'
-
-// Since parser only returns round ends (not round starts) we need to
-// account for the humiliation period before it resets
-const ROUND_HUMILIATION_BUFFER_TICKS = 300
 
 export const PLAYBACK_SPEED_OPTIONS = [
   { label: '3×', value: 3 },
@@ -95,41 +91,29 @@ const PlaybackAction = (props: PlaybackActionProps) => {
 }
 
 export const PlaybackPanel = () => {
-  const parsedDemo = useInstance(state => state.parsedDemo)
+  const session = useInstance(state => state.session)
   const playback = useStore(state => state.playback)
   const bookmarks = useStore(state => state.bookmarks)
+  const showTtlMarkers = useStore(state => state.settings.ui.showTtlMarkers)
   const lastEventHistory = useStore(state => state.eventHistory)?.[0]
   const stickerDragActive = useStore(state => state.drawing.stickerDrag.active)
   const stickersOpen = useStore(state => state.drawing.stickersPanelOpen)
-  const { playing, speed, tick, maxTicks, forceShowPanel } = playback
+  const { playing, speed, tick, maxTicks, forceShowPanel, intervalPerTick } = playback
   const isBookmarked = bookmarks.includes(tick)
   const isMobile = useIsMobile()
+  const tickRate = 1 / (intervalPerTick || 1 / 60)
 
-  const rounds = useMemo(() => {
-    const result = [
-      {
-        tick: ROUND_HUMILIATION_BUFFER_TICKS,
-        winningTeam: parsedDemo?.rounds[0]?.winner || 'none',
-        duration: parsedDemo?.rounds[0]?.length,
-      },
-    ]
-
-    // The last round is always the end of the demo, so we can ignore it
-    parsedDemo?.rounds?.slice(0, -1).forEach((round, index) => {
-      result.push({
-        tick: round.endTick + ROUND_HUMILIATION_BUFFER_TICKS,
-        winningTeam: parsedDemo?.rounds[index + 1]?.winner || 'none',
-        duration: parsedDemo?.rounds[index + 1]?.length,
-      })
-    })
-
-    return result
-  }, [parsedDemo?.rounds])
-
-  const onClickRound = async (round: any) => {
-    await goToTickAction(round.tick)
-    focusMainCanvas()
+  // the label of the current row on the session clock: demo tick for one demo, server tick for two
+  const axisLabel = (row: number) => {
+    if (!session) return row
+    const clamped = Math.max(0, Math.min(session.tickAxis.length - 1, row))
+    return session.tickAxis[clamped]
   }
+  const rowForLabel = (label: number) => {
+    if (!session) return label
+    return label - session.tickAxis[0]
+  }
+  const toPercent = (row: number) => `${((row - 1) / Math.max(maxTicks - 1, 1)) * 100}%`
 
   const togglePlayback = () => {
     togglePlaybackAction()
@@ -199,8 +183,10 @@ export const PlaybackPanel = () => {
               mobileTooltipBypass
               icon={
                 <div className="-mr-1 flex min-w-11 select-none flex-col items-center text-center">
-                  <div className="text-xs leading-none">TICK</div>
-                  <div className="font-bold leading-none">{tick * 2}</div>
+                  <div className="text-xs leading-none">
+                    {session?.kind === 'coop' ? 'SERVER TICK' : 'TICK'}
+                  </div>
+                  <div className="font-bold leading-none">{axisLabel(tick)}</div>
                 </div>
               }
               content={
@@ -213,7 +199,7 @@ export const PlaybackPanel = () => {
                       const tickEl = e.target.elements.namedItem('tick') as HTMLInputElement
                       const newTick = Number(tickEl.value)
                       if (isNaN(newTick)) return
-                      goToTick(newTick / 2)
+                      goToTick(rowForLabel(newTick))
                     }}
                   >
                     <input
@@ -231,8 +217,8 @@ export const PlaybackPanel = () => {
                   </form>
 
                   <div className="mt-2 flex justify-between text-xs opacity-80">
-                    <div>Total Ticks</div>
-                    <div className="font-bold">{maxTicks * 2}</div>
+                    <div>Last tick</div>
+                    <div className="font-bold">{axisLabel(maxTicks)}</div>
                   </div>
                 </div>
               }
@@ -404,6 +390,19 @@ export const PlaybackPanel = () => {
         {/* Timeline slider */}
 
         <div className="relative">
+          {/* Pause intervals, shaded behind the track */}
+          {session?.pauseIntervals.map(([start, end], index) => (
+            <div
+              key={`pause-interval-${index}`}
+              className="pointer-events-none absolute top-1/2 h-2 -translate-y-1/2 rounded-sm bg-white/15"
+              style={{
+                left: toPercent(start),
+                width: `${((end - start) / Math.max(maxTicks - 1, 1)) * 100}%`,
+              }}
+              title="Game paused"
+            />
+          ))}
+
           <Slider.Root
             className="relative flex w-full cursor-pointer select-none items-center"
             min={1}
@@ -419,50 +418,70 @@ export const PlaybackPanel = () => {
             </Slider.Track>
           </Slider.Root>
 
+          {/* Scanner pulses (TTL chat markers) */}
+          {showTtlMarkers &&
+            session &&
+            Array.from(session.ttlRows).map(row => (
+              <div
+                key={`ttl-marker-${row}`}
+                className="pointer-events-none absolute top-full mt-0.5 h-1.5 w-px bg-emerald-300/70"
+                style={{ left: toPercent(row) }}
+              />
+            ))}
+
+          {/* Level transitions */}
+          {session &&
+            Array.from(session.levelTransitionRows).map(row => (
+              <div
+                key={`transition-marker-${row}`}
+                className="absolute top-1/2 h-4 w-1 -translate-y-1/2 cursor-pointer rounded-sm bg-white/80 hover:bg-white"
+                style={{ left: toPercent(row) }}
+                title="Level transition"
+                onClick={() => goToTick(Math.max(1, row))}
+              />
+            ))}
+
           {/* Bookmark markers */}
           {bookmarks.map(bookmarkTick => (
             <div
               key={`bookmark-marker-${bookmarkTick}`}
               className="absolute top-1/2 h-3 w-1 -translate-y-1/2 cursor-pointer rounded-sm bg-amber-400 hover:bg-amber-300"
-              style={{ left: `${((bookmarkTick - 1) / (maxTicks - 1)) * 100}%` }}
+              style={{ left: toPercent(bookmarkTick) }}
               onClick={() => goToTick(bookmarkTick)}
             />
           ))}
         </div>
 
         <div className="mt-2 flex items-center justify-between">
-          {/* Rounds (Jump to round) */}
+          {/* Session summary */}
 
-          <div className="flex items-center text-sm">
-            <div className="text-outline mr-2">Round</div>
-
-            {rounds.map((round, index) => (
-              <div
-                key={`jump-to-round-${index}`}
-                className={cn(
-                  'relative mr-2 flex cursor-pointer items-center justify-center overflow-hidden rounded-full bg-pp-panel/40 text-sm hover:opacity-80 active:opacity-80',
-                  isMobile ? 'h-8 w-8' : 'h-5 w-5',
-                  round.tick <= tick && 'bg-white text-black'
+          <div className="flex items-center gap-3 text-sm">
+            {session ? (
+              <>
+                <div className="text-outline">
+                  {session.kind === 'coop' ? 'Two demos merged' : 'One demo'}
+                </div>
+                {session.ttlRows.length > 0 && showTtlMarkers && (
+                  <div className="text-outline text-emerald-300/90">
+                    {session.ttlRows.length} scanner pulses
+                  </div>
                 )}
-                onClick={onClickRound.bind(null, round)}
-              >
-                <span>{index + 1}</span>
-
-                <div
-                  className={cn(
-                    'absolute -bottom-2 -right-2 h-4 w-4 rotate-45',
-                    round.winningTeam === 'red' && 'bg-pp-killfeed-text-red',
-                    round.winningTeam === 'blue' && 'bg-pp-killfeed-text-blue'
-                  )}
-                />
-              </div>
-            ))}
+                {session.levelTransitionRows.length > 0 && (
+                  <div className="text-outline opacity-80">
+                    {session.levelTransitionRows.length} level transitions
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-outline opacity-70">No demo loaded</div>
+            )}
           </div>
 
           {/* Duration (Current Time / Total Time) */}
 
           <div className="text-outline text-sm">
-            {getDurationFromTicks(tick).formatted} / {getDurationFromTicks(maxTicks).formatted}
+            {getDurationFromTicks(tick, tickRate).formatted} /{' '}
+            {getDurationFromTicks(maxTicks, tickRate).formatted}
           </div>
         </div>
       </div>

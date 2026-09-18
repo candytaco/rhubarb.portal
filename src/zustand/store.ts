@@ -4,10 +4,10 @@ import CanvasDraw from 'react-canvas-draw'
 import { isMobile } from 'react-device-detect'
 import * as THREE from 'three'
 
-import { AsyncParser } from '@components/Analyse/Data/AsyncParser'
-import { getMapBoundaries } from '@components/Analyse/MapBoundaries'
+import type { Portal2Session } from '@components/Analyse/Data/Session'
+import { DEFAULT_MAP } from '@constants/portal2'
 
-import { parseMapBoundaries } from '@utils/scene'
+import { DEFAULT_MAP_BOUNDARIES, parseMapBoundaries } from '@utils/scene'
 
 import {
   ControlsMode,
@@ -24,7 +24,7 @@ import { DrawingState, createInitialDrawingState } from './drawing'
 import rootReducer from './reducer'
 
 // This "Instance Store" is meant to be used for larger objects that are problematic
-// to keep in the "Standard Store". (e.g. parsed demo file (AsyncParser), three.js objects)
+// to keep in the "Standard Store". (e.g. the parsed session, three.js objects)
 // We wanna keep easily accessible references to these important objects because they're
 // used a lot throughout.
 
@@ -38,7 +38,7 @@ export type InstanceState = {
   }
   mapCenterPickerActive: boolean
   threeScene: THREE.Scene
-  parsedDemo?: AsyncParser
+  session?: Portal2Session
   focusedObject?: THREE.Object3D
   lastFocusedPOV?: THREE.Object3D
   drawingCanvas?: CanvasDraw
@@ -54,7 +54,7 @@ export type InstanceState = {
     apply: (camera: SavedSetupCamera) => void
   }
   setThreeScene: (threeScene: THREE.Scene) => void
-  setParsedDemo: (parsedDemo: AsyncParser | undefined) => void
+  setSession: (session: Portal2Session | undefined) => void
   setDrawingCanvas: (drawingCanvas: CanvasDraw) => void
   setFocusedObject: (focusedObject?: THREE.Object3D) => void
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => void
@@ -69,12 +69,10 @@ export type InstanceState = {
       currentCluster: number | null
     }>
   ) => void
-  setSetupCameraBridge: (
-    setupCameraBridge?: {
-      capture: () => SavedSetupCamera | null
-      apply: (camera: SavedSetupCamera) => void
-    }
-  ) => void
+  setSetupCameraBridge: (setupCameraBridge?: {
+    capture: () => SavedSetupCamera | null
+    apply: (camera: SavedSetupCamera) => void
+  }) => void
 }
 
 const sameOffsetVector = (
@@ -88,7 +86,7 @@ const useInstance = create<InstanceState>()(set => ({
   },
   mapCenterPickerActive: false,
   threeScene: new THREE.Scene(),
-  parsedDemo: undefined,
+  session: undefined,
   focusedObject: undefined,
   lastFocusedPOV: undefined,
   drawingCanvas: undefined,
@@ -101,7 +99,7 @@ const useInstance = create<InstanceState>()(set => ({
   },
   setupCameraBridge: undefined,
   setThreeScene: (threeScene: THREE.Scene) => set({ threeScene }),
-  setParsedDemo: (parsedDemo: AsyncParser | undefined) => set({ parsedDemo }),
+  setSession: (session: Portal2Session | undefined) => set({ session }),
   setDrawingCanvas: (drawingCanvas: CanvasDraw) => set({ drawingCanvas }),
   setFocusedObject: (focusedObject?: THREE.Object3D) => set({ focusedObject }),
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => set({ lastFocusedPOV }),
@@ -137,11 +135,13 @@ export type StoreState = {
   parser: {
     status: ParserStatus
     progress: number
+    stage: string
     error?: Error
   }
   scene: {
-    players: Map<any, any>
     map: string
+    /** whether the map has converted assets; false renders the fallback grid */
+    mapAssetsAvailable: boolean | null
     bounds: {
       min: THREE.Vector3
       max: THREE.Vector3
@@ -167,6 +167,10 @@ export type StoreState = {
       mode: SceneMode
       interpolateFrames: boolean
       rtsCenters: Record<string, { x: number; y: number; z: number }>
+      showPortals: boolean
+      showPuzzleElements: boolean
+      showLasers: boolean
+      showTrails: boolean
     }
     camera: {
       position: [number, number, number]
@@ -191,7 +195,7 @@ export type StoreState = {
         enabled: boolean
         showName: boolean
         showHealth: boolean
-        showClass: boolean
+        showRole: boolean
       }
       crosshair: {
         style: CrosshairStyle
@@ -202,8 +206,10 @@ export type StoreState = {
       playerOutlines: boolean
       showStats: boolean
       showSkybox: boolean
+      showTtlMarkers: boolean
+      showConsoleEvents: boolean
       viewDistance: number
-      killfeedSeekBuffer: number
+      eventSeekBuffer: number
     }
   }
   bookmarks: number[]
@@ -227,13 +233,14 @@ export const initialState: StoreState = {
   parser: {
     status: ParserStatus.INIT,
     progress: 0,
+    stage: '',
     error: undefined,
   },
 
   scene: {
-    players: new Map(),
-    map: 'cp_snakewater',
-    bounds: parseMapBoundaries(getMapBoundaries('cp_snakewater')!),
+    map: DEFAULT_MAP,
+    mapAssetsAvailable: null,
+    bounds: parseMapBoundaries(DEFAULT_MAP_BOUNDARIES),
     controls: {
       mode: ControlsMode.RTS,
     },
@@ -245,7 +252,7 @@ export const initialState: StoreState = {
     tick: 1,
     maxTicks: 3000,
     forceShowPanel: false,
-    intervalPerTick: 0.015,
+    intervalPerTick: 1 / 60,
   },
 
   drawing: createInitialDrawingState(),
@@ -255,6 +262,10 @@ export const initialState: StoreState = {
       mode: isMobile ? SceneMode.UNTEXTURED : SceneMode.TEXTURED,
       interpolateFrames: true,
       rtsCenters: {},
+      showPortals: true,
+      showPuzzleElements: true,
+      showLasers: true,
+      showTrails: false,
     },
     camera: {
       position: [0, -400, 200] as [number, number, number],
@@ -282,7 +293,7 @@ export const initialState: StoreState = {
         enabled: true,
         showName: true,
         showHealth: true,
-        showClass: true,
+        showRole: true,
       },
       crosshair: {
         style: 'crosshair' as CrosshairStyle,
@@ -293,8 +304,10 @@ export const initialState: StoreState = {
       playerOutlines: false,
       showStats: true,
       showSkybox: true,
+      showTtlMarkers: true,
+      showConsoleEvents: false,
       viewDistance: 15000,
-      killfeedSeekBuffer: 2,
+      eventSeekBuffer: 2,
     },
   },
 

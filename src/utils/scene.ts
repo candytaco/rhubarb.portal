@@ -1,13 +1,21 @@
 import * as THREE from 'three'
 import { first, last } from 'lodash'
 
-import { ActorDimensions } from '@components/Scene/Actors'
-import { MapBoundaries } from '@components/Analyse/Data/PositionCache'
-
 import { objCoordsToVector3 } from './geometry'
 
-const DEFAULT_RTS_CAMERA_OFFSET = new THREE.Vector3(0, 250, 1000)
 type VectorLike = { x: number; y: number; z: number }
+
+export interface MapBoundaries {
+  boundaryMin: VectorLike
+  boundaryMax: VectorLike
+  cameraOffset?: VectorLike
+  rtsCenter?: VectorLike
+}
+
+export const DEFAULT_MAP_BOUNDARIES: MapBoundaries = {
+  boundaryMin: { x: -1024, y: -1024, z: -256 },
+  boundaryMax: { x: 1024, y: 1024, z: 512 },
+}
 
 /**
  * Get all Actors in the scene
@@ -34,50 +42,38 @@ export function getSceneActor(scene: THREE.Scene, value: any): THREE.Object3D | 
   if (typeof value === 'string') {
     switch (value) {
       case 'first':
-        return first(scene.children.filter(child => child.name === 'actor'))
+        return first(getSceneActors(scene))
 
       case 'last':
-        return last(scene.children.filter(child => child.name === 'actor'))
+        return last(getSceneActors(scene))
     }
   }
 
   if (typeof value === 'number') {
-    scene.traverse(child => {
-      if (child.name === 'actor' && child.userData.entityId === value) {
-        return child
-      }
-    })
+    return getSceneActors(scene).find(child => child.userData.entityId === value)
   }
 
   return undefined
 }
 
-export function getSceneProjectiles(scene: THREE.Scene, name: string): THREE.Object3D[] {
-  const projectiles: THREE.Object3D[] = []
-
-  if (!name) return projectiles
-
-  scene.traverse(child => {
-    if (child.name === name) projectiles.push(child)
-  })
-
-  return projectiles
-}
-
+/**
+ * Scene bounds in raw Source coordinates. The scene is not translated: the map model and every
+ * recorded position share the game's coordinate system.
+ */
 export function parseMapBoundaries(boundaries: MapBoundaries) {
-  const center = new THREE.Vector3(
-    0.5 * (boundaries.boundaryMax.x - boundaries.boundaryMin.x),
-    0.5 * (boundaries.boundaryMax.y - boundaries.boundaryMin.y),
-    -boundaries.boundaryMin.z - 0.5 * ActorDimensions.z
-  )
+  const min = objCoordsToVector3(boundaries.boundaryMin)
+  const max = objCoordsToVector3(boundaries.boundaryMax)
+  const center = min.clone().add(max).multiplyScalar(0.5)
+  const extent = Math.max(max.x - min.x, max.y - min.y)
+  const distance = THREE.MathUtils.clamp(extent * 0.6, 600, 3000)
 
   return {
-    min: objCoordsToVector3(boundaries.boundaryMin),
-    max: objCoordsToVector3(boundaries.boundaryMax),
+    min,
+    max,
     center,
     defaultCameraOffset: boundaries.cameraOffset
       ? objCoordsToVector3(boundaries.cameraOffset)
-      : DEFAULT_RTS_CAMERA_OFFSET.clone(),
+      : new THREE.Vector3(0, -distance, distance * 0.8),
     defaultRtsCenter: boundaries.rtsCenter ? objCoordsToVector3(boundaries.rtsCenter) : center,
   }
 }

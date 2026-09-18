@@ -4,11 +4,14 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { GLTF, GLTFLoader } from 'three/examples/jsm/Addons.js'
 
-import { ActorDimensions } from '@components/Scene/Actors'
-
 import mapChunkingConfig from '@constants/mapChunking.json'
 import { MapVisibilityMetadata } from '@constants/types'
-import { addDownloadAction, updateDownloadAction } from '@zus/actions'
+import {
+  addDownloadAction,
+  removeDownloadAction,
+  setMapAssetsAvailableAction,
+  updateDownloadAction,
+} from '@zus/actions'
 import { getState, useInstance, useStore } from '@zus/store'
 import { getMapModelUrls, getMapVisibilityUrl } from '@utils/game'
 
@@ -74,6 +77,7 @@ export const World = (props: WorldProps) => {
   const { map, mode } = props
 
   const bounds = useStore(state => state.scene.bounds)
+  const mapAssetsAvailable = useStore(state => state.scene.mapAssetsAvailable)
 
   // Briefly ensure the map is cleared when the map changes
   // to prevent lingering of the previous map
@@ -131,32 +135,38 @@ export const World = (props: WorldProps) => {
   useEffect(() => {
     const requestId = ++mapLoadRequestIdRef.current
 
-    try {
-      const mapModelFileUrls = getMapModelUrls(map)
+    // Maps without converted assets (see specs/portal2-coop-replacement.md section 5) render the
+    // fallback grid instead of downloading a model that does not exist
+    if (mapAssetsAvailable === false) {
+      return
+    }
 
-      if (!mapModelFileUrls) {
-        alert('Unable to load map model. It may not be available on dribble.tf.')
-        return
-      }
+    const mapModelFileUrls = getMapModelUrls(map)
 
-      loadGLTF(mapModelFileUrls.textured, `${map} (textured)`).then(gltf => {
+    if (!mapModelFileUrls) {
+      setMapAssetsAvailableAction(false)
+      return
+    }
+
+    loadGLTF(mapModelFileUrls.textured, `${map} (textured)`)
+      .then(gltf => {
         if (requestId === mapLoadRequestIdRef.current && gltf && gltf.scene) {
           setMapModel(gltf.scene)
+          setMapAssetsAvailableAction(true)
         }
       })
-    } catch (error) {
-      alert(
-        `Unable to load map: ${map} (${mode})\nThe project is probably missing the necessary files.`
-      )
-      console.error(error)
-    }
+      .catch(error => {
+        if (requestId !== mapLoadRequestIdRef.current) return
+        console.warn(`No converted map assets for ${map}, showing the fallback grid`, error)
+        setMapAssetsAvailableAction(false)
+      })
 
     return () => {
       if (mapLoadRequestIdRef.current === requestId) {
         mapLoadRequestIdRef.current += 1
       }
     }
-  }, [map, mode])
+  }, [map, mode, mapAssetsAvailable])
 
   useEffect(() => {
     if (!mapModel || !MAP_CHUNKING_ENABLED) {
@@ -250,11 +260,7 @@ export const World = (props: WorldProps) => {
       return
     }
 
-    setChunkVisibilityForCluster(
-      chunkRootsByName,
-      mapVisibility.chunkNames,
-      visibleChunkIndices
-    )
+    setChunkVisibilityForCluster(chunkRootsByName, mapVisibility.chunkNames, visibleChunkIndices)
     currentClusterRef.current = currentCluster
     useInstance.getState().setRuntimePerf({
       visibleChunkCount: visibleChunkIndices.length,
@@ -326,21 +332,56 @@ export const World = (props: WorldProps) => {
     }
   }, [mapModel, mode])
 
-  // Reposition the world to the center of the scene bounds
-  useEffect(() => {
-    // Not entirely sure if this logic is correct
-    const x = bounds.center.x - bounds.max.x
-    const y = -bounds.center.y - bounds.min.y
-    const z = ActorDimensions.z * 0.5
+  // The scene uses raw game coordinates, so the converted map sits at the origin; only the glTF
+  // Y-up to Source Z-up rotation applies
+  return (
+    <>
+      <group ref={ref} name="world" rotation={[Math.PI / 2, 0, 0]}>
+        {mapModel ? <primitive object={mapModel} /> : null}
+        {mapOverlay ? <primitive object={mapOverlay} /> : null}
+      </group>
 
-    ref.current?.position.copy(bounds.center).add(new THREE.Vector3(x, y, z))
-  }, [bounds])
+      {mapAssetsAvailable === false && <FallbackGround bounds={bounds} />}
+    </>
+  )
+}
+
+const FALLBACK_GRID_COLOR = '#3a3f4a'
+const FALLBACK_BOUNDS_COLOR = '#5a6170'
+
+/**
+ * Ground grid and bounds box shown while a map has no converted assets, sized to the recorded
+ * positions. The ground plane is raycastable so stickers and the RTS centre picker still work.
+ */
+const FallbackGround = ({
+  bounds,
+}: {
+  bounds: { min: THREE.Vector3; max: THREE.Vector3; center: THREE.Vector3 }
+}) => {
+  const sizeX = Math.max(bounds.max.x - bounds.min.x, 512)
+  const sizeY = Math.max(bounds.max.y - bounds.min.y, 512)
+  const sizeZ = Math.max(bounds.max.z - bounds.min.z, 128)
+  const extent = Math.max(sizeX, sizeY)
+  const divisions = Math.max(4, Math.round(extent / 128))
+  const groundZ = bounds.min.z
 
   return (
-    // Account for valve maps using different axis system
-    <group ref={ref} name="world" rotation={[Math.PI / 2, 0, 0]}>
-      {mapModel ? <primitive object={mapModel} /> : null}
-      {mapOverlay ? <primitive object={mapOverlay} /> : null}
+    <group name="worldFallback">
+      <gridHelper
+        args={[extent, divisions, FALLBACK_BOUNDS_COLOR, FALLBACK_GRID_COLOR]}
+        position={[bounds.center.x, bounds.center.y, groundZ]}
+        rotation={[Math.PI / 2, 0, 0]}
+      />
+
+      <mesh position={[bounds.center.x, bounds.center.y, groundZ - 0.5]} receiveShadow>
+        <planeGeometry args={[extent, extent]} />
+        <meshStandardMaterial color="#1b1e25" transparent opacity={0.85} />
+      </mesh>
+
+      <mesh position={[bounds.center.x, bounds.center.y, groundZ + sizeZ * 0.5]}>
+        <boxGeometry args={[sizeX, sizeY, sizeZ]} />
+        <meshBasicMaterial color={FALLBACK_BOUNDS_COLOR} wireframe transparent opacity={0.25} />
+      </mesh>
     </group>
   )
 }
@@ -412,7 +453,10 @@ function freezeStaticMapSubtree(root: THREE.Object3D) {
   root.updateMatrixWorld(true)
 }
 
-function getMapLocalPoint(worldPoint: THREE.Vector3, mapRoot: THREE.Object3D): THREE.Vector3 | null {
+function getMapLocalPoint(
+  worldPoint: THREE.Vector3,
+  mapRoot: THREE.Object3D
+): THREE.Vector3 | null {
   mapRoot.updateWorldMatrix(true, false)
 
   const inverseWorldMatrix = new THREE.Matrix4().copy(mapRoot.matrixWorld)
@@ -506,7 +550,8 @@ function loadGLTF(url: string, name?: string) {
       }
 
       const onError = (error: unknown) => {
-        throw error
+        removeDownloadAction(url)
+        reject(error)
       }
 
       gltfLoader.load(url, onLoad, onProgress, onError)

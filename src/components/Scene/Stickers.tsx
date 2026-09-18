@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
 
 import * as THREE from 'three'
-import { useFrame, useLoader, useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 
-import classIconsAtlasUrl from '@assets/class_icons_64.png'
 import { useStore, getState, useInstance } from '@zus/store'
 import {
   addStickerAction,
@@ -12,14 +11,14 @@ import {
   selectStickerAction,
   startStickerDragAction,
 } from '@zus/actions'
-import { STICKER_CLASS_IDS } from '@constants/stickers'
-import { CLASS_ORDER_MAP } from '@constants/mappings'
+import { STICKER_ROLES } from '@constants/stickers'
+import { PLAYER_ROLE_COLORS, PLAYER_ROLE_NAMES } from '@constants/portal2'
 import {
   ControlsMode,
   StickerAnnotation,
   StickerDefinition,
+  StickerRole,
   StickerSymbol,
-  StickerTeam,
 } from '@constants/types'
 import { useIsMobile } from '@utils/hooks'
 
@@ -36,9 +35,9 @@ const STICKER_RING_ANIMATION_SPEED = 12
 const STICKER_RING_SCALE_MIN = 1.1
 const STICKER_RING_SCALE_MAX = 1.45
 
-const STICKER_TEAM_COLORS: Record<StickerTeam, string> = {
-  red: '#cf4a2e',
-  blue: '#5885a2',
+const STICKER_ROLE_COLORS: Record<StickerRole, string> = {
+  blue: PLAYER_ROLE_COLORS.blue,
+  orange: PLAYER_ROLE_COLORS.orange,
 }
 
 type SurfaceHit = {
@@ -65,11 +64,7 @@ export const Stickers = () => {
   const stickerDrag = useStore(state => state.drawing.stickerDrag)
   const selectedStickerId = useStore(state => state.drawing.selectedStickerId)
 
-  const classIconsAtlas = useLoader(THREE.TextureLoader, classIconsAtlasUrl)
-  const stickerTextures = useMemo(
-    () => createStickerTextureMap(classIconsAtlas.image as HTMLImageElement),
-    [classIconsAtlas.image]
-  )
+  const stickerTextures = useMemo(() => createStickerTextureMap(), [])
   const ringTexture = useMemo(() => createStickerRingTexture(), [])
   const dragCursorRef = useRef<{ screenX: number; screenY: number } | null>(null)
   const dragPreviewPositionRef = useRef<THREE.Vector3 | null>(null)
@@ -504,115 +499,112 @@ const SceneSticker = ({
   )
 }
 
-function createStickerTextureMap(image: HTMLImageElement): Record<string, THREE.Texture> {
+function createStickerTextureMap(): Record<string, THREE.Texture> {
   const textures: Record<string, THREE.Texture> = {}
-  const sliceSize = image.width
 
-  STICKER_CLASS_IDS.forEach(classId => {
-    const classIndex = CLASS_ORDER_MAP[classId]
+  // one sticker per bot: a disc in the bot colour with two optics and the bot's initial
+  STICKER_ROLES.forEach(role => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 128
+    canvas.height = 128
 
-    ;(['red', 'blue'] as StickerTeam[]).forEach(team => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 128
-      canvas.height = 128
+    const context = canvas.getContext('2d')
+    if (!context) return
 
-      const context = canvas.getContext('2d')
-      if (!context) return
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    context.translate(64, 64)
 
-      context.clearRect(0, 0, canvas.width, canvas.height)
-      context.translate(64, 64)
+    context.beginPath()
+    context.arc(0, 0, 56, 0, Math.PI * 2)
+    context.fillStyle = STICKER_ROLE_COLORS[role]
+    context.fill()
 
-      context.beginPath()
-      context.arc(0, 0, 56, 0, Math.PI * 2)
-      context.fillStyle = STICKER_TEAM_COLORS[team]
-      context.fill()
+    context.beginPath()
+    context.arc(0, 0, 56, 0, Math.PI * 2)
+    context.strokeStyle = '#ffffff'
+    context.lineWidth = 10
+    context.stroke()
 
-      context.beginPath()
-      context.arc(0, 0, 56, 0, Math.PI * 2)
-      context.strokeStyle = '#ffffff'
-      context.lineWidth = 10
-      context.stroke()
+    context.beginPath()
+    context.arc(0, 0, 48, 0, Math.PI * 2)
+    context.fillStyle = 'rgba(15, 18, 24, 0.12)'
+    context.fill()
 
-      context.beginPath()
-      context.arc(0, 0, 48, 0, Math.PI * 2)
-      context.fillStyle = 'rgba(15, 18, 24, 0.12)'
-      context.fill()
+    context.fillStyle = 'rgba(255, 255, 255, 0.92)'
+    context.beginPath()
+    context.arc(-16, -10, 11, 0, Math.PI * 2)
+    context.fill()
+    context.beginPath()
+    context.arc(16, -10, 11, 0, Math.PI * 2)
+    context.fill()
 
-      context.save()
-      context.beginPath()
-      context.arc(0, 0, 47, 0, Math.PI * 2)
-      context.clip()
-      context.drawImage(image, 0, classIndex * sliceSize, sliceSize, sliceSize, -38, -38, 76, 76)
-      context.restore()
+    context.font = '700 30px Arial, sans-serif'
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.fillText(PLAYER_ROLE_NAMES[role].charAt(0), 0, 24)
 
-      const texture = new THREE.CanvasTexture(canvas)
-      texture.colorSpace = THREE.SRGBColorSpace
-      texture.needsUpdate = true
-      textures[getStickerTextureKey({ kind: 'class', classId, team })] = texture
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.needsUpdate = true
+    textures[getStickerTextureKey({ kind: 'player', role })] = texture
+  })
+
+  textures[getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.A })] =
+    createSymbolStickerTexture({
+      backgroundColor: '#7b61ff',
+      drawSymbol: context => {
+        drawSymbolText(context, 'A')
+      },
     })
-  })
 
-  textures[
-    getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.A })
-  ] = createSymbolStickerTexture({
-    backgroundColor: '#7b61ff',
-    drawSymbol: context => {
-      drawSymbolText(context, 'A')
-    },
-  })
+  textures[getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.B })] =
+    createSymbolStickerTexture({
+      backgroundColor: '#3b82f6',
+      drawSymbol: context => {
+        drawSymbolText(context, 'B')
+      },
+    })
 
-  textures[
-    getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.B })
-  ] = createSymbolStickerTexture({
-    backgroundColor: '#3b82f6',
-    drawSymbol: context => {
-      drawSymbolText(context, 'B')
-    },
-  })
+  textures[getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.C })] =
+    createSymbolStickerTexture({
+      backgroundColor: '#f59e0b',
+      drawSymbol: context => {
+        drawSymbolText(context, 'C')
+      },
+    })
 
-  textures[
-    getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.C })
-  ] = createSymbolStickerTexture({
-    backgroundColor: '#f59e0b',
-    drawSymbol: context => {
-      drawSymbolText(context, 'C')
-    },
-  })
+  textures[getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.GREEN_TICK })] =
+    createSymbolStickerTexture({
+      backgroundColor: '#2aa65a',
+      drawSymbol: context => {
+        context.strokeStyle = '#ffffff'
+        context.lineCap = 'round'
+        context.lineJoin = 'round'
+        context.lineWidth = 14
+        context.beginPath()
+        context.moveTo(-24, 2)
+        context.lineTo(-6, 22)
+        context.lineTo(28, -18)
+        context.stroke()
+      },
+    })
 
-  textures[
-    getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.GREEN_TICK })
-  ] = createSymbolStickerTexture({
-    backgroundColor: '#2aa65a',
-    drawSymbol: context => {
-      context.strokeStyle = '#ffffff'
-      context.lineCap = 'round'
-      context.lineJoin = 'round'
-      context.lineWidth = 14
-      context.beginPath()
-      context.moveTo(-24, 2)
-      context.lineTo(-6, 22)
-      context.lineTo(28, -18)
-      context.stroke()
-    },
-  })
-
-  textures[
-    getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.RED_X })
-  ] = createSymbolStickerTexture({
-    backgroundColor: '#d84a45',
-    drawSymbol: context => {
-      context.strokeStyle = '#ffffff'
-      context.lineCap = 'round'
-      context.lineJoin = 'round'
-      context.lineWidth = 14
-      context.beginPath()
-      context.moveTo(-24, -24)
-      context.lineTo(24, 24)
-      context.moveTo(24, -24)
-      context.lineTo(-24, 24)
-      context.stroke()
-    },
-  })
+  textures[getStickerTextureKey({ kind: 'symbol', symbol: StickerSymbol.RED_X })] =
+    createSymbolStickerTexture({
+      backgroundColor: '#d84a45',
+      drawSymbol: context => {
+        context.strokeStyle = '#ffffff'
+        context.lineCap = 'round'
+        context.lineJoin = 'round'
+        context.lineWidth = 14
+        context.beginPath()
+        context.moveTo(-24, -24)
+        context.lineTo(24, 24)
+        context.moveTo(24, -24)
+        context.lineTo(-24, 24)
+        context.stroke()
+      },
+    })
 
   return textures
 }
@@ -689,8 +681,8 @@ function createStickerRingTexture(): THREE.Texture {
 }
 
 function getStickerTextureKey(sticker: StickerDefinition | StickerAnnotation): string {
-  if (sticker.kind === 'class') {
-    return `${sticker.team}-${sticker.classId}`
+  if (sticker.kind === 'player') {
+    return `player-${sticker.role}`
   }
 
   return sticker.symbol

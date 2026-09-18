@@ -25,16 +25,15 @@ class App extends React.Component {
     await loadSetupsAction()
     const sharedSetup = await bootstrapSharedSetupFromHashAction()
 
-    // A demo may be requested by URL (?demo= / ?demoUrl=) — see @utils/embed. Resolving it
-    // first means the empty scene boots straight into that demo's map, instead of
-    // downloading the default map's model and discarding it seconds later.
+    // Demos may be requested by URL (?demoUrl= / ?demoUrl2=), see @utils/embed. The map is only
+    // known once a demo is parsed, so the scene boots into the default or shared setup map first.
     const urlDemo = await resolveUrlDemoAction()
 
-    await loadEmptySceneMapAction(urlDemo?.map ?? sharedSetup?.map ?? getState().scene.map)
+    await loadEmptySceneMapAction(sharedSetup?.map ?? getState().scene.map)
 
     this.setState({ isReady: true })
 
-    // Only once the viewer is mounted — the download progress overlay lives there.
+    // Only once the viewer is mounted: the download progress overlay lives there.
     if (urlDemo) {
       const loaded = await loadUrlDemoAction(urlDemo)
       if (loaded?.tick) goToTickAction(loaded.tick)

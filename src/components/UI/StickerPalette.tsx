@@ -1,4 +1,4 @@
-import { ClassIcon } from '@components/UI/ClassIcon'
+import { RoleIcon } from '@components/UI/RoleIcon'
 import { FaRedoIcon, FaTrashIcon, FaUndoIcon } from '@components/Misc/Icons'
 
 import { useStore } from '@zus/store'
@@ -9,18 +9,19 @@ import {
   startStickerDragAction,
   undoStickersAction,
 } from '@zus/actions'
-import { STICKER_CLASS_IDS, isSameStickerDefinition } from '@constants/stickers'
+import { STICKER_ROLES, isSameStickerDefinition } from '@constants/stickers'
+import { PLAYER_ROLE_NAMES } from '@constants/portal2'
 import {
   StickerDefinition,
+  StickerRole,
   StickerSymbol,
-  StickerTeam,
   SymbolStickerDefinition,
 } from '@constants/types'
 import { cn } from '@utils/styling'
 
-const STICKER_TEAM_STYLES: Record<StickerTeam, string> = {
-  red: 'bg-[#cf4a2e]/20 border-[#cf4a2e]/70 hover:bg-[#cf4a2e]/30',
-  blue: 'bg-[#5885a2]/20 border-[#5885a2]/70 hover:bg-[#5885a2]/30',
+const STICKER_ROLE_STYLES: Record<StickerRole, string> = {
+  blue: 'bg-[#3d9bff]/20 border-[#3d9bff]/70 hover:bg-[#3d9bff]/30',
+  orange: 'bg-[#ff8a1e]/20 border-[#ff8a1e]/70 hover:bg-[#ff8a1e]/30',
 }
 
 const SYMBOL_STICKERS: {
@@ -85,57 +86,54 @@ export const StickerPalette = () => {
       data-sticker-panel="true"
       className="w-auto rounded-[28px] border border-white/10 bg-black/75 p-4 text-white shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur"
     >
-      <div className="grid gap-3">
-        {(['blue', 'red'] as StickerTeam[]).map(team => (
-          <div key={`sticker-palette-${team}`} className="flex flex-nowrap gap-2">
-            {STICKER_CLASS_IDS.map(classId => {
-              const sticker: StickerDefinition = { kind: 'class', classId, team }
-              const isDraggingThisSticker =
-                stickerDrag.active &&
-                stickerDrag.kind === 'create' &&
-                isSameStickerDefinition(stickerDrag.sticker, sticker)
+      <div className="flex flex-nowrap gap-2">
+        {STICKER_ROLES.map(role => {
+          const sticker: StickerDefinition = { kind: 'player', role }
+          const isDraggingThisSticker =
+            stickerDrag.active &&
+            stickerDrag.kind === 'create' &&
+            isSameStickerDefinition(stickerDrag.sticker, sticker)
 
-              return (
-                <button
-                  key={`sticker-palette-${team}-${classId}`}
-                  className={cn(
-                    'cursor-grab rounded-full border p-2 transition-all hover:scale-105 active:scale-95',
-                    STICKER_TEAM_STYLES[team],
-                    isDraggingThisSticker && 'scale-105 cursor-grabbing border-white bg-white/20'
-                  )}
-                  onPointerDown={handleStartStickerDrag(sticker)}
-                  aria-label={`Drag ${team} class ${classId} sticker`}
-                >
-                  <ClassIcon classId={classId} size={22} />
-                </button>
-              )
-            })}
-          </div>
-        ))}
+          return (
+            <button
+              key={`sticker-palette-${role}`}
+              className={cn(
+                'flex cursor-grab items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition-all hover:scale-105 active:scale-95',
+                STICKER_ROLE_STYLES[role],
+                isDraggingThisSticker && 'scale-105 cursor-grabbing border-white bg-white/20'
+              )}
+              onPointerDown={handleStartStickerDrag(sticker)}
+              aria-label={`Drag ${PLAYER_ROLE_NAMES[role]} sticker`}
+            >
+              <RoleIcon role={role} size={22} />
+              {PLAYER_ROLE_NAMES[role]}
+            </button>
+          )
+        })}
 
-        <div className="flex flex-nowrap justify-start gap-2 border-t border-white/10 pt-3">
-          {SYMBOL_STICKERS.map(({ sticker, buttonClassName, label }) => {
-            const isDraggingThisSticker =
-              stickerDrag.active &&
-              stickerDrag.kind === 'create' &&
-              isSameStickerDefinition(stickerDrag.sticker, sticker)
+        <div className="mx-1 w-px self-stretch bg-white/10" />
 
-            return (
-              <button
-                key={`sticker-palette-${sticker.symbol}`}
-                className={cn(
-                  'inline-flex h-[38px] w-[38px] cursor-grab items-center justify-center self-start rounded-full border p-2 transition-all hover:scale-105 active:scale-95',
-                  buttonClassName,
-                  isDraggingThisSticker && 'scale-105 cursor-grabbing border-white bg-white/20'
-                )}
-                onPointerDown={handleStartStickerDrag(sticker)}
-                aria-label={`Drag ${label} sticker`}
-              >
-                <StickerSymbolIcon symbol={sticker.symbol} className="h-[22px] w-[22px]" />
-              </button>
-            )
-          })}
-        </div>
+        {SYMBOL_STICKERS.map(({ sticker, buttonClassName, label }) => {
+          const isDraggingThisSticker =
+            stickerDrag.active &&
+            stickerDrag.kind === 'create' &&
+            isSameStickerDefinition(stickerDrag.sticker, sticker)
+
+          return (
+            <button
+              key={`sticker-palette-${sticker.symbol}`}
+              className={cn(
+                'inline-flex h-[38px] w-[38px] cursor-grab items-center justify-center self-start rounded-full border p-2 transition-all hover:scale-105 active:scale-95',
+                buttonClassName,
+                isDraggingThisSticker && 'scale-105 cursor-grabbing border-white bg-white/20'
+              )}
+              onPointerDown={handleStartStickerDrag(sticker)}
+              aria-label={`Drag ${label} sticker`}
+            >
+              <StickerSymbolIcon symbol={sticker.symbol} className="h-[22px] w-[22px]" />
+            </button>
+          )
+        })}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">

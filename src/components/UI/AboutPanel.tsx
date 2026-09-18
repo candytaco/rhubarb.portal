@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import * as Tooltip from '@radix-ui/react-tooltip'
 import axios from 'axios'
 
 import { TogglePanel, TogglePanelButton } from '@components/UI/Shared/TogglePanel'
@@ -17,17 +16,19 @@ import {
   updateDownloadAction,
 } from '@zus/actions'
 import { getAsset } from '@utils/misc'
-import { MAP_NAME_SEARCH_MAP } from '@constants/mappings'
+import { PORTAL2_COOP_MAPS } from '@constants/portal2'
 
 //
 // ─── ABOUT PANEL ────────────────────────────────────────────────────────────────
 //
 
-const TFTV_URL = 'https://www.teamfortress.tv/57837/dribble-tf-stv-demo-replay-in-browser'
-const GITHUB_URL = `https://www.github.com/bryjch/dribble.tf`
+const GITHUB_URL = 'https://github.com/candytaco/rhubarb.portal'
+const DEMOFILES_URL = 'https://github.com/gallantlab/DemoFiles'
+const SAMPLE_DEMO = 'portal2_coop.dem'
 
 export const AboutPanel = () => {
   const isOpen = useStore(state => state.ui.activePanels.includes('About'))
+  const loadedMap = useStore(state => state.scene.map)
 
   const {
     open: openFileBrowser,
@@ -36,13 +37,13 @@ export const AboutPanel = () => {
   } = useDropzone({
     noClick: true,
     noKeyboard: true,
-    maxFiles: 1,
-    multiple: false,
+    maxFiles: 2,
+    multiple: true,
   })
 
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
-    toggleUIPanelAction('MatchKillfeed', false)
+    toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Bookmarks', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('About')
@@ -53,11 +54,11 @@ export const AboutPanel = () => {
   }
 
   const onClickSampleDemo = async () => {
-    let url = getAsset('/samples/i52_snakewater_gc.dem')
+    const url = getAsset(`/samples/${SAMPLE_DEMO}`)
 
-    await addDownloadAction({ type: 'demo', url, name: 'i52_snakewater_gc.dem' })
+    await addDownloadAction({ type: 'demo', url, name: SAMPLE_DEMO })
 
-    const fileBuffer = await axios
+    const fileBuffer: ArrayBuffer = await axios
       .get(url, {
         responseType: 'arraybuffer',
         onDownloadProgress: event => {
@@ -69,8 +70,8 @@ export const AboutPanel = () => {
       })
       .then(res => res.data)
 
-    await parseDemoAction(fileBuffer)
-    goToTickAction(1000) // Skip to the juice
+    await parseDemoAction([{ name: SAMPLE_DEMO, buffer: fileBuffer }])
+    goToTickAction(600)
   }
 
   const onClickMapName = async (mapName: string) => {
@@ -92,42 +93,18 @@ export const AboutPanel = () => {
           <div className="flex items-center">
             {/* Logo */}
 
-            <img src="/logo192.png" alt="dribble.tf" className="mr-4 h-16 w-16" />
+            <img src="/logo192.png" alt="rhubarb.portal" className="mr-4 h-16 w-16" />
 
             <div className="w-full">
               {/* Title */}
 
-              <Tooltip.Provider delayDuration={300}>
-                <Tooltip.Root>
-                  <Tooltip.Trigger asChild>
-                    <div className="inline-block text-3xl font-bold leading-none tracking-tight">
-                      dribble<span>.tf</span>
-                    </div>
-                  </Tooltip.Trigger>
-
-                  <Tooltip.Portal>
-                    <Tooltip.Content side="right" sideOffset={5}>
-                      <div className="rounded-lg bg-pp-panel/80 px-4 py-3 text-sm">
-                        Demo replay in browser <span className="opacity-30">but less epic</span> 😜
-                      </div>
-                      <Tooltip.Arrow className="fill-pp-panel/80" />
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
+              <div className="inline-block text-3xl font-bold leading-none tracking-tight">
+                rhubarb<span className="opacity-70">.portal</span>
+              </div>
 
               {/* External URLs */}
 
               <div className="flex text-xs">
-                <a
-                  href={TFTV_URL}
-                  target="_blank"
-                  rel="noopener referrer"
-                  className="inline-block text-right underline opacity-60 transition-all hover:underline hover:opacity-100"
-                >
-                  teamfortress.tv
-                </a>
-                <div className="mx-1 opacity-60">/</div>
                 <a
                   href={GITHUB_URL}
                   target="_blank"
@@ -136,6 +113,15 @@ export const AboutPanel = () => {
                 >
                   Github
                 </a>
+                <div className="mx-1 opacity-60">/</div>
+                <a
+                  href={DEMOFILES_URL}
+                  target="_blank"
+                  rel="noopener referrer"
+                  className="inline-block text-left underline opacity-60 transition-all hover:underline hover:opacity-100"
+                >
+                  DemoFiles parser
+                </a>
               </div>
             </div>
           </div>
@@ -143,7 +129,12 @@ export const AboutPanel = () => {
           {/* Description */}
 
           <div className="mt-5">
-            <p>Watch Team Fortress 2 STV demos in your browser.</p>
+            <p>Replay Portal 2 co-op demos in your browser.</p>
+            <p className="mt-2 text-sm opacity-70">
+              Drop one player&apos;s <code>.dem</code> file, or both players&apos; demos of the same
+              session. Two demos are merged on the server clock, so both bots, their portals and the
+              chamber elements come from whichever demo saw them.
+            </p>
           </div>
 
           {/* Main CTAs */}
@@ -154,7 +145,7 @@ export const AboutPanel = () => {
               className="rounded-full border border-dashed px-3.5 py-1 transition-all hover:border-solid hover:bg-black hover:invert"
               onClick={onClickDropSelectFile}
             >
-              Drop/select <code>.dem</code> file
+              Drop/select <code>.dem</code> file(s)
             </button>
 
             <div className="mx-2">/</div>
@@ -177,7 +168,7 @@ export const AboutPanel = () => {
             {[
               ['Left Mouse', 'Rotate camera'],
               ['Right Mouse / WASD', 'Pan camera'],
-              ['1 / 2 / 3', 'Change camera modes'],
+              ['1 / 2 / 3', 'Bot POV / free camera / overview camera'],
               ['F', 'Drawing tools'],
             ].map(([key, value]) => (
               <React.Fragment key={`controls-${value}`}>
@@ -190,24 +181,27 @@ export const AboutPanel = () => {
             ))}
           </div>
 
-          {/* Supported Maps */}
+          {/* Maps */}
 
-          <p className="mb-2 mt-10 text-xs font-black uppercase opacity-60">Supported Maps</p>
+          <p className="mb-2 mt-10 text-xs font-black uppercase opacity-60">Co-op maps</p>
 
-          <div className="grid grid-cols-2 gap-y-1">
-            {Object.keys(MAP_NAME_SEARCH_MAP)
-              .sort((a, b) => a.localeCompare(b))
-              .map(mapName => (
-                <div key={`map-${mapName}`} className="flex justify-start">
-                  <div
-                    className="cursor-pointer hover:underline"
-                    onClick={onClickMapName.bind(this, mapName)}
-                  >
-                    <span className="opacity-50">&bull;</span>
-                    &nbsp;&nbsp;{mapName}
-                  </div>
+          <p className="mb-3 text-xs opacity-60">
+            Map geometry is served from <code>public/models/maps/&lt;map&gt;/</code> once converted;
+            maps without assets show the recorded positions over a grid.
+          </p>
+
+          <div className="grid grid-cols-2 gap-y-1 text-sm">
+            {PORTAL2_COOP_MAPS.map(mapName => (
+              <div key={`map-${mapName}`} className="flex justify-start">
+                <div
+                  className={`cursor-pointer hover:underline ${mapName === loadedMap ? 'font-bold' : ''}`}
+                  onClick={onClickMapName.bind(this, mapName)}
+                >
+                  <span className="opacity-50">&bull;</span>
+                  &nbsp;&nbsp;{mapName}
                 </div>
-              ))}
+              </div>
+            ))}
           </div>
         </div>
       </TogglePanel>

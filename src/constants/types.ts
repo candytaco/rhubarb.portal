@@ -1,3 +1,5 @@
+import type { PlayerRole } from './portal2'
+
 export const SceneMode = {
   WIREFRAME: 'wireframe',
   UNTEXTURED: 'untextured',
@@ -36,7 +38,8 @@ export const DrawingTool = {
 
 export type DrawingTool = (typeof DrawingTool)[keyof typeof DrawingTool]
 
-export type StickerTeam = 'red' | 'blue'
+/** The two co-op bots a sticker can stand for */
+export type StickerRole = Exclude<PlayerRole, 'unknown'>
 
 export const StickerSymbol = {
   A: 'a',
@@ -48,10 +51,9 @@ export const StickerSymbol = {
 
 export type StickerSymbol = (typeof StickerSymbol)[keyof typeof StickerSymbol]
 
-export type ClassStickerDefinition = {
-  kind: 'class'
-  classId: number
-  team: StickerTeam
+export type PlayerStickerDefinition = {
+  kind: 'player'
+  role: StickerRole
 }
 
 export type SymbolStickerDefinition = {
@@ -59,7 +61,7 @@ export type SymbolStickerDefinition = {
   symbol: StickerSymbol
 }
 
-export type StickerDefinition = ClassStickerDefinition | SymbolStickerDefinition
+export type StickerDefinition = PlayerStickerDefinition | SymbolStickerDefinition
 
 export type StickerAnnotation = StickerDefinition & {
   id: string
@@ -69,14 +71,15 @@ export type StickerAnnotation = StickerDefinition & {
 export const UIPanelType = {
   ABOUT: 'About',
   SETTINGS: 'Settings',
-  MATCH_KILLFEED: 'MatchKillfeed',
+  EVENT_LOG: 'EventLog',
   BOOKMARKS: 'Bookmarks',
   SETUPS: 'Setups',
 } as const
 
 export type UIPanelType = (typeof UIPanelType)[keyof typeof UIPanelType]
 
-export const SETUP_STORAGE_VERSION = 1 as const
+// Version 1 setups carried TF2 class stickers and are dropped on load
+export const SETUP_STORAGE_VERSION = 2 as const
 
 export type SetupRtsCamera = {
   mode: 'rts'

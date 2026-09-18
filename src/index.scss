@@ -41,20 +41,10 @@
   --pp-accent-secondary: 241 104 24;
   --pp-accent-tertiary: 214 77 138;
 
-  --pp-actor-model-red: 255 2 2;
-  --pp-actor-model-blue: 3 116 255;
-  --pp-pipebomb-red: 255 37 37;
-  --pp-pipebomb-blue: 20 43 255;
-  --pp-stickybomb-red: 255 2 2;
-  --pp-stickybomb-blue: 0, 55, 255;
+  // Atlas (blue) and P-body (orange)
+  --pp-role-blue: 61 155 255;
+  --pp-role-orange: 255 138 30;
 
-  --pp-killfeed-text-blue: 119 169 236;
-  --pp-killfeed-text-red: 255 74 74;
-  --pp-focused-background-blue: 136 174 184;
-  --pp-focused-background-red: 172 38 65;
-  --pp-healthbar-blue: 136 174 184;
-  --pp-healthbar-red: 172 38 65;
-  --pp-health-overhealed: 62 255 0;
   --pp-health-low: 255 119 104;
 }
 
