@@ -9,4 +9,5 @@ blender -b -noaudio --python "$scriptDir/plumber_import_mdl.py" -- \
 	--model "models/props/metal_box.mdl=$repoRoot/public/models/props/companion_cube.glb" \
 	--model "models/props/reflection_cube.mdl=$repoRoot/public/models/props/reflection_cube.glb" \
 	--model "models/props_gameplay/mp_ball.mdl=$repoRoot/public/models/props/mp_ball.glb" \
-	--model "models/props_underground/underground_weighted_cube.mdl=$repoRoot/public/models/props/underground_weighted_cube.glb"
+	--model "models/props_underground/underground_weighted_cube.mdl=$repoRoot/public/models/props/underground_weighted_cube.glb" \
+	--model "models/npcs/turret/turret.mdl=$repoRoot/public/models/props/turret.glb"
