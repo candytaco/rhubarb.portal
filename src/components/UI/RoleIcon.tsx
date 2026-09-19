@@ -31,20 +31,7 @@ export const RoleIcon = ({ role, size, className }: RoleIconProps) => {
         stroke="rgba(0,0,0,0.35)"
         strokeWidth="2"
       />
-      <circle cx="11.5" cy="13" r="3" fill="#ffffff" opacity="0.9" />
-      <circle cx="20.5" cy="13" r="3" fill="#ffffff" opacity="0.9" />
-      <text
-        x="16"
-        y="26"
-        textAnchor="middle"
-        fontSize="9"
-        fontWeight="700"
-        fontFamily="Arial, sans-serif"
-        fill="#ffffff"
-        opacity="0.9"
-      >
         {letter}
-      </text>
     </svg>
   )
 }

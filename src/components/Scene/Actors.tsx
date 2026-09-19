@@ -12,6 +12,7 @@ import { useInstance, useStore } from '@zus/store'
 import {
   BOT_MODEL_FILES,
   EYE_HEIGHT_STANDING,
+  PLAYER_ROLE_NAMES,
   PLAYER_HEIGHT,
   PLAYER_RADIUS,
   PLAYER_ROLE_COLORS,
@@ -297,7 +298,7 @@ export const Actor = ({ frame, next }: ActorProps) => {
         >
           {alive && reported && (
             <Nameplate
-              name={player.name}
+              name={PLAYER_ROLE_NAMES[player.role]}
               role={player.role}
               health={health}
               settings={settings.ui.nameplate}

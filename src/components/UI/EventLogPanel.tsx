@@ -10,6 +10,7 @@ import { useStore, useInstance } from '@zus/store'
 import { toggleUIPanelAction, goToTickAction, jumpToPlayerPOVCamera } from '@zus/actions'
 import { getDurationFromTicks } from '@utils/parser'
 import { playerBySlot, roleColor } from '@utils/session'
+import { PLAYER_ROLE_NAMES } from '@constants/portal2'
 import { cn } from '@utils/styling'
 
 type FilterKey = 'portals' | 'players' | 'chat' | 'console' | 'session' | 'other'
@@ -181,7 +182,9 @@ export const EventLogPanel = () => {
                       style={{ color: roleColor(player.role) }}
                     >
                       <RoleIcon role={player.role} size={14} />
-                      <span className="max-w-[7rem] truncate">{player.name}</span>
+                      <span className="max-w-[7rem] truncate">
+                        {PLAYER_ROLE_NAMES[player.role]}
+                      </span>
                     </div>
                   ) : (
                     <div className="w-4 shrink-0" />
@@ -190,7 +193,10 @@ export const EventLogPanel = () => {
                   <div className={cn('min-w-0 flex-1 truncate', event.type === 'chat' && 'italic')}>
                     {event.type === 'chat'
                       ? `“${event.text}”`
-                      : stripPlayerName(event.text, player?.name)}
+                      : stripPlayerName(
+                          event.text,
+                          player ? PLAYER_ROLE_NAMES[player.role] : undefined
+                        )}
                   </div>
 
                   <div className="shrink-0 text-[0.65rem] uppercase tracking-wide opacity-40">

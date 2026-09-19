@@ -177,7 +177,7 @@ export const AboutPanel = () => {
               ['Middle Mouse', 'Pan camera up, down, left and right'],
               ['WASD', 'Move camera in the ground plane'],
               ['E / Q', 'Move camera up / down'],
-              ['Scroll', 'Movement speed while a movement key is held'],
+              ['Scroll', 'Movement speed'],
               ['1 / 2', 'Bot POV / free camera'],
               ['F', 'Drawing tools'],
             ].map(([key, value]) => (

@@ -40,8 +40,7 @@ export const focusMainCanvas = debounce((): void => {
  * Returns undefined on browsers that don't support performance.memory.
  */
 export const readJsHeapMemoryMb = (): number | undefined => {
-  const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } })
-    .memory
+  const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
   if (!mem) return undefined
   return mem.usedJSHeapSize / (1024 * 1024)
 }
@@ -57,11 +56,21 @@ export const isPerfLoggingEnabled = (): boolean => {
   }
 }
 
+/**
+ * Resolve a public asset path against the origin it is served from. Assets fall back to the
+ * bundle's own base path, which is not the domain root when the site is a GitHub Pages project
+ * page.
+ *
+ * @param endpoint  root-relative path of the asset, e.g. /models/props/turret.glb
+ * @returns         the URL to fetch the asset from
+ */
 export const getAsset = (endpoint: string): string => {
   let url = ''
 
   if (import.meta.env.PROD && !!import.meta.env.VITE_APP_ASSET_URL) {
     url += `${import.meta.env.VITE_APP_ASSET_URL}`
+  } else {
+    url += import.meta.env.BASE_URL.replace(/\/$/, '')
   }
 
   url += endpoint

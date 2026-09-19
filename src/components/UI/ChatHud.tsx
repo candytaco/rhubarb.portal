@@ -3,6 +3,7 @@ import { isMobile } from 'react-device-detect'
 
 import type { Portal2Session, SessionChatMessage } from '@components/Analyse/Data/Session'
 import { playerBySlot, roleColor } from '@utils/session'
+import { PLAYER_ROLE_NAMES } from '@constants/portal2'
 
 const HUD_CHAT_TIME_SECONDS = 12
 const HUD_CHAT_FADE_SECONDS = 2
@@ -72,7 +73,7 @@ export const ChatHud = (props: ChatHudProps) => {
             : Math.max(0, Math.min(1, (HUD_CHAT_TIME_SECONDS - ageSeconds) / HUD_CHAT_FADE_SECONDS))
 
         const player = playerBySlot(session, entry.playerSlot)
-        const name = player?.name ?? entry.sender
+        const name = PLAYER_ROLE_NAMES[player?.role ?? 'unknown']
 
         return (
           <div

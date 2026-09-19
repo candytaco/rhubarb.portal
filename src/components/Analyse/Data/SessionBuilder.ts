@@ -15,6 +15,7 @@ import { MPMapCompleted, Rumble } from '../../../demofiles/DemoParser/UserMessag
 import { interpArray, type Matrix } from '../../../demofiles/Numeric'
 import {
   CONSOLE_COMMAND_NOISE,
+  PLAYER_ROLE_NAMES,
   RUMBLE_PORTAL_PLACEMENT_FAILURE,
   TEAM_BLUE,
   TEAM_ORANGE,
@@ -186,7 +187,7 @@ export function buildSession(
     for (const [tick, event] of parser.getGameEvents()) {
       const userId = typeof event.values.userid === 'number' ? event.values.userid : null
       const playerSlot = userId !== null ? (playerSlotByUserId.get(userId) ?? null) : null
-      const playerName = playerSlot !== null ? players[playerSlot].name : null
+      const playerName = playerSlot !== null ? PLAYER_ROLE_NAMES[players[playerSlot].role] : null
       pushEvent({
         row: rowForDemoTick(demoIndex, tick),
         tick: 0,

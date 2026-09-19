@@ -43,6 +43,8 @@ export type InstanceState = {
   lastFocusedPOV?: THREE.Object3D
   drawingCanvas?: CanvasDraw
   frameProgress: number
+  /** move speed last set by scrolling the free camera, with the time it was set */
+  moveSpeedNotice: { value: number; shownAt: number } | null
   runtimePerf: {
     renderCalls: number
     renderTriangles: number
@@ -59,6 +61,7 @@ export type InstanceState = {
   setFocusedObject: (focusedObject?: THREE.Object3D) => void
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => void
   setFrameProgress: (frameProgress: number) => void
+  setMoveSpeedNotice: (moveSpeedNotice: { value: number; shownAt: number } | null) => void
   setMapCenterPickerActive: (mapCenterPickerActive: boolean) => void
   setMapOffsetDebug: (mapOffsetDebug: { cameraOffset: { x: number; y: number; z: number } }) => void
   setRuntimePerf: (
@@ -91,6 +94,7 @@ const useInstance = create<InstanceState>()(set => ({
   lastFocusedPOV: undefined,
   drawingCanvas: undefined,
   frameProgress: 0,
+  moveSpeedNotice: null,
   runtimePerf: {
     renderCalls: 0,
     renderTriangles: 0,
@@ -104,6 +108,7 @@ const useInstance = create<InstanceState>()(set => ({
   setFocusedObject: (focusedObject?: THREE.Object3D) => set({ focusedObject }),
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => set({ lastFocusedPOV }),
   setFrameProgress: (frameProgress: number) => set({ frameProgress }),
+  setMoveSpeedNotice: moveSpeedNotice => set({ moveSpeedNotice }),
   setMapCenterPickerActive: (mapCenterPickerActive: boolean) => set({ mapCenterPickerActive }),
   setMapOffsetDebug: mapOffsetDebug =>
     set(state => {

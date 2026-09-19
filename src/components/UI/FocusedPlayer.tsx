@@ -35,7 +35,7 @@ export const FocusedPlayer = (props: FocusedPlayerProps) => {
       <div className="mb-4 text-3xl">
         {!focused.alive && (
           <div className="animate-pulse text-xl font-black text-[#fbff09] [text-shadow:0_0_3px_#000000]">
-            {focused.player.name} is down
+            {PLAYER_ROLE_NAMES[role]} is down
           </div>
         )}
       </div>
@@ -61,9 +61,8 @@ export const FocusedPlayer = (props: FocusedPlayerProps) => {
         >
           <div className="flex flex-1 items-center px-4 py-2">
             <div className="overflow-hidden text-ellipsis whitespace-nowrap">
-              {focused.player.name}
+              {PLAYER_ROLE_NAMES[role]}
             </div>
-            <div className="pl-2 text-xs opacity-60">{PLAYER_ROLE_NAMES[role]}</div>
             <div className="pl-2">
               <RoleIcon role={role} size={20} />
             </div>

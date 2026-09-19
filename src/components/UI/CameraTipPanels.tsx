@@ -113,7 +113,6 @@ export const SpectatorCameraTipPanel = () => {
           <span>Move speed</span>
           <div className="flex-1" />
           <kbd>Scroll</kbd>
-          <span className="ml-1 opacity-60">while moving</span>
         </div>
       </motion.div>
     </motion.div>

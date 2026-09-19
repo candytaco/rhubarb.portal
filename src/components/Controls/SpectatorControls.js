@@ -56,6 +56,7 @@ export class SpectatorControls {
     this.moveSpeedStep = MOVESPEEDSTEP
     this.minMoveSpeed = MINMOVESPEED
     this.maxMoveSpeed = MAXMOVESPEED
+    this.onMoveSpeedChange = null
     this.friction = FRICTION
     this.sprintMultiplier = SPRINTMULT
     this.keyMapping = Object.assign({}, KEYMAPPING, KEYMAPPING)
@@ -136,9 +137,7 @@ export class SpectatorControls {
 
     event.preventDefault()
 
-    // The wheel only sets how fast the movement keys move the camera, and only while one is held
-    if (!this._isMovementKeyHeld()) return null
-
+    // The wheel sets how fast the movement keys move the camera
     if (event.deltaY < 0) {
       this.moveSpeed *= this.moveSpeedStep
     } else if (event.deltaY > 0) {
@@ -146,6 +145,7 @@ export class SpectatorControls {
     }
 
     this.moveSpeed = clamp(this.moveSpeed, this.minMoveSpeed, this.maxMoveSpeed)
+    if (this.onMoveSpeedChange) this.onMoveSpeedChange(this.moveSpeed)
   }
   _processContextMenuEvent(event) {
     if (!this.enabled) return null
@@ -162,9 +162,6 @@ export class SpectatorControls {
     if (!target) return false
     if (target.isContentEditable === true) return true
     return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
-  }
-  _isMovementKeyHeld() {
-    return (this._keyState.press & (FORWARD | BACK | LEFT | RIGHT | UP | DOWN)) !== 0
   }
   _processKey(key, isPressed) {
     const { press } = this._keyState

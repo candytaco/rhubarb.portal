@@ -12,7 +12,7 @@ export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
   const session = useInstance(state => state.session)
   const player = session?.players[slot]
   const role = player?.role ?? 'unknown'
-  const label = player ? player.name : `Player ${slot + 1}`
+  const label = player ? PLAYER_ROLE_NAMES[role] : `Player ${slot + 1}`
   const color = PLAYER_ROLE_COLORS[role]
 
   return (
@@ -29,9 +29,7 @@ export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
         <span>{label}</span>
       </div>
 
-      <div className="mt-1 text-xs opacity-50">
-        {player ? PLAYER_ROLE_NAMES[role] : 'No demo loaded'}
-      </div>
+      {!player && <div className="mt-1 text-xs opacity-50">No demo loaded</div>}
 
       <div className="mt-4 max-w-[18rem] text-xs opacity-40">
         Video playback synced to the demo clock will appear here
@@ -71,12 +69,17 @@ const SessionDetails = () => {
 
         <div className="opacity-50">Demos</div>
         <div>
-          {session.demos.map((demo, index) => (
-            <div key={`demo-${index}`} className="truncate">
-              {demo.fileName}
-              <span className="opacity-50"> ({demo.clientName})</span>
-            </div>
-          ))}
+          {session.demos.map((demo, index) => {
+            const recorder = session.players.find(player => player.demoIndex === index)
+            return (
+              <div key={`demo-${index}`} className="truncate">
+                {demo.fileName}
+                {recorder && (
+                  <span className="opacity-50"> ({PLAYER_ROLE_NAMES[recorder.role]})</span>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         <div className="opacity-50">Clock</div>
@@ -103,12 +106,11 @@ const SessionDetails = () => {
           {session.players.map(player => (
             <div key={`player-${player.slot}`} className="flex items-center gap-2">
               <RoleIcon role={player.role} size={14} />
-              <span className="font-semibold">{player.name}</span>
+              <span className="font-semibold">{PLAYER_ROLE_NAMES[player.role]}</span>
               <span className="opacity-50">
-                {PLAYER_ROLE_NAMES[player.role]}
                 {player.demoIndex !== null
-                  ? ` · recorded demo ${player.demoIndex + 1}`
-                  : ' · from entity state'}
+                  ? `recorded demo ${player.demoIndex + 1}`
+                  : 'from entity state'}
               </span>
             </div>
           ))}

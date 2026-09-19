@@ -33,6 +33,7 @@ import { BookmarksPanel } from '@components/UI/BookmarksPanel'
 import { SetupsPanel } from '@components/UI/SetupsPanel'
 import { FpsCounter } from '@components/UI/FpsCounter'
 import { Crosshair } from '@components/UI/Crosshair'
+import { MoveSpeedNotice } from '@components/UI/MoveSpeedNotice'
 import { MapOffsetDebugPanel } from '@components/UI/MapOffsetDebugPanel'
 
 import { motion } from 'framer-motion'
@@ -191,6 +192,11 @@ const Controls = () => {
     }
   }, [controlsMode, isStickersToolActive])
 
+  // Scrolling the free camera's move speed reports the new value for the on-screen notice
+  const reportMoveSpeed = useCallback((moveSpeed: number) => {
+    useInstance.getState().setMoveSpeedNotice({ value: moveSpeed, shownAt: performance.now() })
+  }, [])
+
   const captureSetupCamera = useCallback((): SavedSetupCamera | null => {
     if (!cameraRef.current) return null
 
@@ -299,6 +305,7 @@ const Controls = () => {
           args={[cameraRef.current, gl.domElement]}
           lookSpeed={settings.controls.lookSpeed}
           moveSpeed={settings.controls.moveSpeed}
+          onMoveSpeedChange={reportMoveSpeed}
         />
       )}
     </>
@@ -792,6 +799,10 @@ class DemoViewer extends Component<DemoViewerProps> {
 
         <div className="ui-layer pointer-events-none items-center justify-center">
           <Crosshair />
+        </div>
+
+        <div className="ui-layer pointer-events-none items-center justify-center">
+          <MoveSpeedNotice />
         </div>
 
         <div className="ui-layers" ref={this.uiLayers}>

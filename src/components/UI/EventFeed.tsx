@@ -1,5 +1,6 @@
 import type { Portal2Session, SessionEvent } from '@components/Analyse/Data/Session'
 import { RoleIcon } from '@components/UI/RoleIcon'
+import { PLAYER_ROLE_NAMES } from '@constants/portal2'
 
 import { jumpToPlayerPOVCamera } from '@zus/actions'
 import { useInstance, useStore } from '@zus/store'
@@ -83,14 +84,14 @@ export const EventFeed = ({ session, tick }: EventFeedProps) => {
                 }}
               >
                 <RoleIcon role={player.role} size={14} />
-                {player.name}
+                {PLAYER_ROLE_NAMES[player.role]}
               </div>
             )}
 
             <div className={cn('font-normal', event.type === 'chat' && 'italic')}>
               {event.type === 'chat'
                 ? `“${event.text}”`
-                : stripPlayerName(event.text, player?.name)}
+                : stripPlayerName(event.text, player ? PLAYER_ROLE_NAMES[player.role] : undefined)}
             </div>
           </div>
         )

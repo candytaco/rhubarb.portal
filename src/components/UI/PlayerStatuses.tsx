@@ -110,7 +110,7 @@ const MobileStatusItem = ({ player, focused }: MobileStatusItemProps) => {
       onClick={onClickItem}
     >
       <RoleIcon role={player.player.role} size={16} />
-      <span className="max-w-[6rem] truncate">{player.player.name}</span>
+      <span className="max-w-[6rem] truncate">{PLAYER_ROLE_NAMES[player.player.role]}</span>
       <span className={cn('font-bold', percentage < 40 && player.alive && 'text-pp-health-low')}>
         {player.alive ? player.health : 'Dead'}
       </span>
@@ -196,7 +196,7 @@ export const StatusItem = (props: StatusItemProps) => {
 
         {/* Name */}
         <div className="relative overflow-hidden text-ellipsis whitespace-nowrap px-2">
-          {player.player.name}
+          {PLAYER_ROLE_NAMES[player.player.role]}
         </div>
 
         {/* Spacer */}
