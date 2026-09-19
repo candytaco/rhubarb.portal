@@ -95,6 +95,8 @@ export class SpectatorControls {
         return null
     }
 
+    // preventDefault keeps the click from focusing the canvas, whose key handler needs the focus
+    this.domElement.focus()
     event.preventDefault()
 
     this._dragState.x = event.clientX
