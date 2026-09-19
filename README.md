@@ -6,7 +6,7 @@ The 3D viewport takes the left two thirds of a widescreen page. The right third 
 
 This is a fork of [dribble.tf](https://github.com/bryjch/dribble.tf) with the Team Fortress 2 parsing, models and UI replaced. The demo parser is a TypeScript port of the Portal 2 co-op parser in [gallantlab/DemoFiles](https://github.com/gallantlab/DemoFiles) (`src/demofiles`), which follows [NeKzor/sdp](https://github.com/NeKzor/sdp) for the demo format and [UncraftedName/UntitledParser](https://github.com/UncraftedName/UntitledParser) for entity decoding. The plan, the deviations from the Python reference and the remaining work are in `specs/portal2-coop-replacement.md`.
 
-![alt text](image.png)
+![alt text](public/preview.png)
 
 ### Running
 

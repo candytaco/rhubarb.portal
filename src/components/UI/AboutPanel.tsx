@@ -99,7 +99,7 @@ export const AboutPanel = () => {
           <div className="flex items-center">
             {/* Logo */}
 
-            <img src="/logo192.png" alt="rhubarb.portal" className="mr-4 h-16 w-16" />
+            <img src={getAsset('/logo192.png')} alt="rhubarb.portal" className="mr-4 h-16 w-16" />
 
             <div className="w-full">
               {/* Title */}
