@@ -10,6 +10,10 @@ import zipfile
 import bmesh
 import bpy
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from chunk_map_glb import parent_object_preserving_world_transform
+
 
 def restore_plumber_binary_if_needed():
     """Restore plumber.pyd if Blender left it as plumber.pyd.unloaded."""
@@ -214,6 +218,11 @@ LUMP_TEXDATA_STRING_DATA = 43
 LUMP_TEXDATA_STRING_TABLE = 44
 LUMP_PAKFILE = 40
 LUMP_COUNT = 64
+
+# Flat colour given to Water shader materials, which Plumber otherwise leaves blank. It is the
+# refract tint of the goo's bottom material, as 8-bit sRGB.
+WATER_TINT_COLOR = (151, 135, 34)
+WATER_ROUGHNESS = 0.3
 
 
 def _normalize_slashes(value):
@@ -833,6 +842,118 @@ def ensure_material_resolved(material_path, fs, dir_paths, pak, alias_root, asse
     return material_exists_in_dirs(normalized, dir_paths) or fs.file_exists(normalized)
 
 
+def bakeArmatureDeformations():
+	"""Bake every armature-deformed mesh into a plain mesh in its rest pose and remove the armatures.
+
+	Plumber imports each model as an armature whose rest pose stands the flat mesh data up, and
+	the export otherwise carries that pose only as a skin. Baked meshes take over their
+	armature's name so the prop entity name stays on the GLB node.
+	"""
+
+	depsgraph = bpy.context.evaluated_depsgraph_get()
+	armatureNamesByMesh = {}
+
+	for meshObject in list(bpy.context.scene.objects):
+		if meshObject.type != "MESH":
+			continue
+		if not any(modifier.type == "ARMATURE" for modifier in meshObject.modifiers):
+			continue
+
+		bakedMesh = bpy.data.meshes.new_from_object(
+			meshObject.evaluated_get(depsgraph), preserve_all_data_layers = True, depsgraph = depsgraph
+		)
+		for material in meshObject.data.materials:
+			if material is not None and material.name not in bakedMesh.materials:
+				bakedMesh.materials.append(material)
+
+		if meshObject.parent is not None and meshObject.parent.type == "ARMATURE":
+			armatureNamesByMesh[meshObject.name] = meshObject.parent.name
+
+		meshObject.data = bakedMesh
+		meshObject.modifiers.clear()
+		parent_object_preserving_world_transform(meshObject, None)
+
+	for armatureObject in [obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"]:
+		bpy.data.objects.remove(armatureObject, do_unlink = True)
+
+	for meshName, armatureName in armatureNamesByMesh.items():
+		meshObject = bpy.data.objects.get(meshName)
+		if meshObject is not None:
+			meshObject.name = armatureName
+
+	for mesh in [mesh for mesh in bpy.data.meshes if mesh.users == 0]:
+		bpy.data.meshes.remove(mesh)
+
+
+def convertSrgbChannelToLinear(channel):
+	"""Convert one 8-bit sRGB channel to a linear float.
+
+	:param channel:	channel value in 0..255
+	:returns:		linear channel value in 0..1
+	"""
+
+	value = channel / 255.0
+	if value <= 0.04045:
+		return value / 12.92
+	return ((value + 0.055) / 1.055) ** 2.4
+
+
+def isWaterMaterial(fileSystem, materialName):
+	"""Report whether a Blender material came from a VMT that uses the Water shader.
+
+	:param fileSystem:		Plumber GameFileSystem the VMT is read through
+	:param materialName:	Blender material name, which Plumber sets to the VMT path without extension
+	:returns:				True when the VMT's shader is Water
+	"""
+
+	vmtPath = normalize_material_reference(materialName)
+	if not vmtPath:
+		return False
+
+	try:
+		text = fileSystem.read_file_text(vmtPath)
+	except Exception:
+		return False
+
+	for line in text.splitlines():
+		token = line.strip().strip('"')
+		if token and not token.startswith("//"):
+			return token.lower() == "water"
+	return False
+
+
+def tintWaterMaterials(fileSystem):
+	"""Give every Water shader material a flat goo colour in place of the blank Plumber leaves.
+
+	:param fileSystem:	Plumber GameFileSystem the VMTs are read through
+	"""
+
+	tint = tuple(convertSrgbChannelToLinear(channel) for channel in WATER_TINT_COLOR) + (1.0,)
+
+	for material in bpy.data.materials:
+		if not isWaterMaterial(fileSystem, material.name):
+			continue
+
+		material.use_nodes = True
+		nodes = material.node_tree.nodes
+		links = material.node_tree.links
+
+		principled = next((node for node in nodes if node.type == "BSDF_PRINCIPLED"), None)
+		if principled is None:
+			principled = nodes.new("ShaderNodeBsdfPrincipled")
+			output = next((node for node in nodes if node.type == "OUTPUT_MATERIAL"), None)
+			if output is None:
+				output = nodes.new("ShaderNodeOutputMaterial")
+			links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+
+		for link in list(links):
+			if link.to_node == principled and link.to_socket.name == "Base Color":
+				links.remove(link)
+
+		principled.inputs["Base Color"].default_value = tint
+		principled.inputs["Roughness"].default_value = WATER_ROUGHNESS
+
+
 def main():
     args = parse_args()
 
@@ -930,6 +1051,8 @@ def main():
         material_simple_materials=True,
     )
 
+    bakeArmatureDeformations()
+    tintWaterMaterials(fs)
     strip_imported_invisible_faces()
 
     out_dir = os.path.dirname(args.out)
