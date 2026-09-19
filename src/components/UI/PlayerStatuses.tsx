@@ -1,5 +1,6 @@
 import type { Portal2Session, SessionPortal } from '@components/Analyse/Data/Session'
 import { RoleIcon } from '@components/UI/RoleIcon'
+import { TTLFlash } from '@components/UI/TTLFlash'
 import { PLAYER_ROLE_NAMES } from '@constants/portal2'
 
 import { getPortalFrame, PlayerFrame } from '@utils/session'
@@ -22,8 +23,8 @@ export interface PlayerStatusesProps {
 }
 
 /**
- * One status card per bot, stacked on the left of the viewport, with the held object and the
- * state of the bot's two portals
+ * The TTL marker followed by one status card per bot, in a row above the screen recordings, with
+ * the held object and the state of the bot's two portals
  */
 export const PlayerStatuses = (props: PlayerStatusesProps) => {
   const isMobile = useIsMobile()
@@ -34,7 +35,8 @@ export const PlayerStatuses = (props: PlayerStatusesProps) => {
 
   if (isMobile) {
     return (
-      <div className="absolute inset-x-0 bottom-0 flex h-8 items-stretch">
+      <div className="flex items-stretch gap-[1.5px]">
+        <TTLFlash session={session} tick={tick} />
         {sorted.map(player => (
           <MobileStatusItem
             key={`mobile-status-${player.slot}`}
@@ -47,7 +49,8 @@ export const PlayerStatuses = (props: PlayerStatusesProps) => {
   }
 
   return (
-    <div className="absolute left-0 mx-[1.5px] flex flex-col items-start gap-[1.5px]">
+    <div className="flex items-stretch gap-[1.5px]">
+      <TTLFlash session={session} tick={tick} />
       {sorted.map(player => (
         <StatusItem
           key={`status-item-${player.slot}`}
@@ -102,7 +105,7 @@ const MobileStatusItem = ({ player, focused }: MobileStatusItemProps) => {
 // ─── STATUS ITEM ────────────────────────────────────────────────────────────────
 //
 
-const STATUS_ITEM_WIDTH = 'w-72'
+const STATUS_ITEM_WIDTH = 'min-w-0 flex-1'
 const STATUS_ITEM_HEIGHT = 'h-9'
 
 export interface StatusItemProps {
@@ -132,7 +135,7 @@ export const StatusItem = (props: StatusItemProps) => {
         'overflow-hidden rounded-xl transition-all',
         STATUS_ITEM_WIDTH,
         STATUS_ITEM_HEIGHT,
-        focused && 'z-10 translate-x-3 outline outline-[3px] outline-white',
+        focused && 'z-10 outline outline-[3px] outline-white',
         !player.alive && 'opacity-60'
       )}
       onClick={onClickItem}

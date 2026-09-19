@@ -26,7 +26,6 @@ import { SettingsPanel } from '@components/UI/SettingsPanel'
 import { PlaybackPanel } from '@components/UI/PlaybackPanel'
 import { EventFeed } from '@components/UI/EventFeed'
 import { ChatHud } from '@components/UI/ChatHud'
-import { PlayerStatuses } from '@components/UI/PlayerStatuses'
 import { FocusedPlayer } from '@components/UI/FocusedPlayer'
 import { EventLogPanel } from '@components/UI/EventLogPanel'
 import { BookmarksPanel } from '@components/UI/BookmarksPanel'
@@ -824,12 +823,6 @@ class DemoViewer extends Component<DemoViewerProps> {
           {session && (
             <div className="ui-layer m-4 items-end justify-start">
               <ChatHud session={session} tick={playback.tick} />
-            </div>
-          )}
-
-          {playersThisTick.length > 0 && (
-            <div className="ui-layer items-center justify-stretch">
-              <PlayerStatuses session={session!} players={playersThisTick} tick={renderTick} />
             </div>
           )}
 

@@ -137,9 +137,7 @@ export const AboutPanel = () => {
           <div className="mt-5">
             <p>Replay Portal 2 co-op demos in your browser.</p>
             <p className="mt-2 text-sm opacity-70">
-              Drop one player&apos;s <code>.dem</code> file, or both players&apos; demos of the same
-              session. Two demos are merged on the server clock, so both bots, their portals and the
-              chamber elements come from whichever demo saw them.
+             Upload one or both player's demofiles from a co-op session
             </p>
           </div>
 
@@ -172,13 +170,13 @@ export const AboutPanel = () => {
 
           <div className="grid grid-cols-[auto,1fr] gap-y-1">
             {[
-              ['Left Mouse', 'Pan camera in the ground plane'],
-              ['Right Mouse', 'Rotate camera'],
-              ['Middle Mouse', 'Pan camera up, down, left and right'],
-              ['WASD', 'Move camera in the ground plane'],
+              ['Left Mouse', 'Move camera F/B/L/R'],
+              ['Right Mouse', 'Look around'],
+              ['Middle Mouse', 'Move camera in U/D/L/R'],
+              ['WASD', 'Move'],
               ['E / Q', 'Move camera up / down'],
               ['Scroll', 'Movement speed'],
-              ['1 / 2', 'Bot POV / free camera'],
+              ['1 / 2', '1: Cycle first-person view, 2: free camera'],
               ['F', 'Drawing tools'],
             ].map(([key, value]) => (
               <React.Fragment key={`controls-${value}`}>

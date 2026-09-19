@@ -1,7 +1,9 @@
 import { useInstance, useStore } from '@zus/store'
 import { RoleIcon } from '@components/UI/RoleIcon'
+import { PlayerStatuses } from '@components/UI/PlayerStatuses'
 import { PLAYER_ROLE_COLORS, PLAYER_ROLE_NAMES } from '@constants/portal2'
 import { getDurationFromTicks } from '@utils/parser'
+import { getPlayerFrames } from '@utils/session'
 import { cn } from '@utils/styling'
 
 /**
@@ -124,6 +126,9 @@ const SessionDetails = () => {
  * The right hand column: two screen recording placeholders and the session details
  */
 export const SessionSidebar = () => {
+  const session = useInstance(state => state.session)
+  const tick = useStore(state => state.playback.tick)
+
   return (
     <aside
       className={cn(
@@ -131,6 +136,9 @@ export const SessionSidebar = () => {
         'lg:h-screen lg:flex-none lg:border-l lg:border-t-0'
       )}
     >
+      {session && (
+        <PlayerStatuses session={session} players={getPlayerFrames(session, tick)} tick={tick} />
+      )}
       <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Recordings</div>
       <RecordingPlaceholder slot={0} />
       <RecordingPlaceholder slot={1} />
