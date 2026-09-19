@@ -204,10 +204,17 @@ const Controls = () => {
   useEffect(() => {
     if (!spectatorRef.current) return
 
-    spectatorRef.current.allowPointerLock = !isStickersToolActive
+    spectatorRef.current.allowInput = !isStickersToolActive
 
     if (isStickersToolActive && spectatorRef.current.isEnabled()) {
       spectatorRef.current.disable()
+      return
+    }
+
+    // The controls hold no input of their own while disabled, so leaving the stickers tool has to
+    // hand the free camera back
+    if (!isStickersToolActive && controlsMode === ControlsMode.SPECTATOR) {
+      spectatorRef.current.enable()
     }
   }, [controlsMode, isStickersToolActive])
 
@@ -265,10 +272,13 @@ const Controls = () => {
 
     if (controlsMode !== ControlsMode.SPECTATOR) return false
 
+    // Disabling restores the XYZ rotation order so the saved quaternion applies cleanly; enabling
+    // again reorders it and hands the camera back
     spectatorRef.current?.disable()
     cameraRef.current.position.set(...pendingCamera.position)
     cameraRef.current.quaternion.set(...pendingCamera.quaternion)
     cameraRef.current.updateMatrixWorld()
+    spectatorRef.current?.enable()
     pendingSetupCameraRef.current = null
     return true
   }, [controlsMode])

@@ -68,7 +68,7 @@ var RtsControls = function (object, domElement) {
   // Set to false to disable use of the keys
   this.enableKeys = true
 
-  // Movement keys: WASD moves in the ground plane, Q and E move along the world up axis
+  // Movement keys: WASD moves in the ground plane, E and Q move along the world up axis
   this.keys = { W: 87, A: 65, S: 83, D: 68, Q: 81, E: 69 }
 
   // Multiplier on keyboard movement, changed by scrolling while a movement key is held
@@ -78,7 +78,7 @@ var RtsControls = function (object, domElement) {
   this.moveSpeedStep = 1.2
 
   // Mouse buttons
-  this.mouseButtons = { LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN }
+  this.mouseButtons = { LEFT: MOUSE.PAN, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.ROTATE }
 
   // Touch fingers
   this.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }
@@ -603,11 +603,11 @@ var RtsControls = function (object, domElement) {
         break
 
       case scope.keys.Q:
-        isMoving.up = true
+        isMoving.down = true
         break
 
       case scope.keys.E:
-        isMoving.down = true
+        isMoving.up = true
         break
 
       default:
@@ -641,11 +641,11 @@ var RtsControls = function (object, domElement) {
         break
 
       case scope.keys.Q:
-        isMoving.up = false
+        isMoving.down = false
         break
 
       case scope.keys.E:
-        isMoving.down = false
+        isMoving.up = false
         break
 
       default:

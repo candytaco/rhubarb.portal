@@ -242,7 +242,7 @@ export const initialState: StoreState = {
     mapAssetsAvailable: null,
     bounds: parseMapBoundaries(DEFAULT_MAP_BOUNDARIES),
     controls: {
-      mode: ControlsMode.RTS,
+      mode: ControlsMode.SPECTATOR,
     },
   },
 

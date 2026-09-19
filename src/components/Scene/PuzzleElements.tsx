@@ -1,9 +1,12 @@
+import { Suspense, useMemo } from 'react'
+
 import * as THREE from 'three'
-import { Line } from '@react-three/drei'
+import { Line, useGLTF } from '@react-three/drei'
 
 import type { Portal2Session } from '@components/Analyse/Data/Session'
 import { EntityColumns, getEntityFrames, getPlayerFrames } from '@utils/session'
 import { CUBE_SIZE, FLOOR_BUTTON_RADIUS } from '@constants/portal2'
+import { getAsset } from '@utils/misc'
 
 export interface PuzzleElementsProps {
   session: Portal2Session
@@ -13,10 +16,55 @@ export interface PuzzleElementsProps {
 
 const CUBE_COLOR = '#d8d8d8'
 const HELD_CUBE_COLOR = '#ffd66b'
+// Every cube uses the standard cube model: the companion cube differs only by skin 1, which the
+// model export does not carry.
+const CUBE_MODEL_FILE = '/models/props/companion_cube.glb'
 const BUTTON_IDLE_COLOR = '#8a8a8a'
 const BUTTON_PRESSED_COLOR = '#4ade80'
 const DOOR_COLOR = '#b0b0b0'
 const LASER_COLOR = '#ff3b3b'
+
+/**
+ * Weighted cube model, tinted while a player holds it. Cube series carry no angles, so the model
+ * keeps its spawn orientation with only the glTF Y-up to Source Z-up rotation applied.
+ */
+const CubeModel = ({ held }: { held: boolean }) => {
+  const gltf = useGLTF(getAsset(CUBE_MODEL_FILE), true, false)
+
+  const model = useMemo(() => {
+    const scene = gltf.scene.clone(true)
+    if (held) {
+      scene.traverse(node => {
+        const mesh = node as THREE.Mesh
+        if (!mesh.isMesh) return
+        const material = (mesh.material as THREE.MeshStandardMaterial).clone()
+        material.emissive = new THREE.Color(HELD_CUBE_COLOR)
+        material.emissiveIntensity = 0.4
+        mesh.material = material
+      })
+    }
+    return scene
+  }, [gltf.scene, held])
+
+  return (
+    <group rotation={[Math.PI / 2, 0, 0]}>
+      <primitive object={model} />
+    </group>
+  )
+}
+
+/** Untextured cube shown while the cube model is still loading */
+const PlaceholderCube = ({ held }: { held: boolean }) => (
+  <mesh>
+    <boxGeometry args={[CUBE_SIZE, CUBE_SIZE, CUBE_SIZE]} />
+    <meshStandardMaterial
+      color={held ? HELD_CUBE_COLOR : CUBE_COLOR}
+      emissive={held ? HELD_CUBE_COLOR : '#000000'}
+      emissiveIntensity={held ? 0.4 : 0}
+      roughness={0.6}
+    />
+  </mesh>
+)
 
 /**
  * Weighted cubes, floor buttons, doors and lasers at the current axis row, as simple shapes
@@ -38,20 +86,16 @@ export const PuzzleElements = ({ session, row, showLasers }: PuzzleElementsProps
       {cubes.map(frame => {
         const held = heldEntities.has(frame.series.entityIndex)
         return (
-          <mesh
+          <group
             key={`cube-${frame.series.key}`}
             name="cube"
             position={[frame.position.x, frame.position.y, frame.position.z]}
             userData={{ entityIndex: frame.series.entityIndex }}
           >
-            <boxGeometry args={[CUBE_SIZE, CUBE_SIZE, CUBE_SIZE]} />
-            <meshStandardMaterial
-              color={held ? HELD_CUBE_COLOR : CUBE_COLOR}
-              emissive={held ? HELD_CUBE_COLOR : '#000000'}
-              emissiveIntensity={held ? 0.4 : 0}
-              roughness={0.6}
-            />
-          </mesh>
+            <Suspense fallback={<PlaceholderCube held={held} />}>
+              <CubeModel held={held} />
+            </Suspense>
+          </group>
         )
       })}
 

@@ -14,20 +14,29 @@ const UP = 1 << 4
 const DOWN = 1 << 5
 const SPRINT = 1 << 6
 
+// drag modes
+const DRAG_NONE = 0
+const DRAG_PAN = 1
+const DRAG_PAN_VERTICAL = 2
+const DRAG_ROTATE = 3
+
 // defaults
 const MOVESPEED = 20
 const FRICTION = 0.8
 const LOOKSPEED = 5
 const SPRINTMULT = 3
+const PANSPEED = 2 // world units per pixel of mouse drag
+const DOLLYSTEP = 5 // multiples of moveSpeed per wheel notch
+const MOVESPEEDSTEP = 1.2
+const MINMOVESPEED = 2
+const MAXMOVESPEED = 320
 const KEYMAPPING = {
   [keycode('w')]: 'FORWARD',
   [keycode('a')]: 'LEFT',
   [keycode('s')]: 'BACK',
   [keycode('d')]: 'RIGHT',
-  // [keycode('space')]: 'UP',
-  // [keycode('ctrl')]: 'DOWN',
+  [keycode('q')]: 'DOWN',
   [keycode('e')]: 'UP',
-  [keycode('c')]: 'DOWN',
   [keycode('shift')]: 'SPRINT',
 }
 const MOUSEMAPPING = {
@@ -35,7 +44,6 @@ const MOUSEMAPPING = {
   MIDDLE: 1,
   RIGHT: 2,
 }
-const ESCLOCKDELAY = 1500 // millis
 
 export class SpectatorControls {
   constructor(camera, domElement) {
@@ -43,27 +51,71 @@ export class SpectatorControls {
     this.domElement = domElement
     this.lookSpeed = LOOKSPEED
     this.moveSpeed = MOVESPEED
+    this.panSpeed = PANSPEED
+    this.dollyStep = DOLLYSTEP
+    this.moveSpeedStep = MOVESPEEDSTEP
+    this.minMoveSpeed = MINMOVESPEED
+    this.maxMoveSpeed = MAXMOVESPEED
     this.friction = FRICTION
     this.sprintMultiplier = SPRINTMULT
     this.keyMapping = Object.assign({}, KEYMAPPING, KEYMAPPING)
     this.enabled = false
-    this.allowPointerLock = true
-    this.lastEscFromPointerLock = 0
+    this.allowInput = true
     this._mouseState = { x: 0, y: 0 }
+    this._dragState = { mode: DRAG_NONE, x: 0, y: 0 }
     this._keyState = { press: 0, prevPress: 0 }
     this._moveState = { velocity: new THREE.Vector3(0, 0, 0) }
     this._processMouseMoveEvent = this._processMouseMoveEvent.bind(this)
     this._processMouseDownEvent = this._processMouseDownEvent.bind(this)
     this._processMouseUpEvent = this._processMouseUpEvent.bind(this)
-    this._processPointerLockChangeEvent = this._processPointerLockChangeEvent.bind(this)
+    this._processWheelEvent = this._processWheelEvent.bind(this)
+    this._processContextMenuEvent = this._processContextMenuEvent.bind(this)
     this._processKeyEvent = this._processKeyEvent.bind(this)
     this.isEnabled = this.isEnabled.bind(this)
   }
+  _processMouseDownEvent(event) {
+    if (!this.enabled || !this.allowInput) return null
+
+    switch (event.button) {
+      case MOUSEMAPPING.LEFT:
+        this._dragState.mode = DRAG_PAN
+        break
+
+      case MOUSEMAPPING.MIDDLE:
+        this._dragState.mode = DRAG_PAN_VERTICAL
+        break
+
+      case MOUSEMAPPING.RIGHT:
+        this._dragState.mode = DRAG_ROTATE
+        break
+
+      default:
+        this._dragState.mode = DRAG_NONE
+        return null
+    }
+
+    event.preventDefault()
+
+    this._dragState.x = event.clientX
+    this._dragState.y = event.clientY
+
+    document.addEventListener('mousemove', this._processMouseMoveEvent)
+    document.addEventListener('mouseup', this._processMouseUpEvent)
+  }
   _processMouseMoveEvent(event) {
-    this._processMouseMove(
-      event.movementX || event.mozMovementX || event.webkitMovementX,
-      event.movementY || event.mozMovementY || event.webkitMovementY
-    )
+    if (this._dragState.mode === DRAG_NONE) return null
+
+    const deltaX = event.clientX - this._dragState.x
+    const deltaY = event.clientY - this._dragState.y
+
+    this._dragState.x = event.clientX
+    this._dragState.y = event.clientY
+
+    if (this._dragState.mode === DRAG_ROTATE) {
+      this._processMouseMove(deltaX, deltaY)
+    } else {
+      this._panCamera(deltaX, deltaY, this._dragState.mode === DRAG_PAN_VERTICAL)
+    }
   }
   _processMouseMove(x = 0, y = 0) {
     // division by clientHeight makes sensitivity consistent between different window dimensions
@@ -72,33 +124,50 @@ export class SpectatorControls {
       y: (2 * Math.PI * y) / this.domElement.clientHeight,
     }
   }
-  _processMouseDownEvent(event) {
-    if (event.button === MOUSEMAPPING.LEFT) {
-      if (!this.allowPointerLock) return null
-      const timeSinceLastEsc = performance.now() - this.lastEscFromPointerLock
-      if (timeSinceLastEsc <= ESCLOCKDELAY) return null
-      this.enable()
+  _processMouseUpEvent(/*event*/) {
+    this._dragState.mode = DRAG_NONE
+    this._mouseState = { x: 0, y: 0 }
+
+    document.removeEventListener('mousemove', this._processMouseMoveEvent)
+    document.removeEventListener('mouseup', this._processMouseUpEvent)
+  }
+  _processWheelEvent(event) {
+    if (!this.enabled || !this.allowInput) return null
+
+    event.preventDefault()
+
+    // While a movement key is held the wheel sets how fast those keys move the camera
+    if (this._isMovementKeyHeld()) {
+      if (event.deltaY < 0) {
+        this.moveSpeed *= this.moveSpeedStep
+      } else if (event.deltaY > 0) {
+        this.moveSpeed /= this.moveSpeedStep
+      }
+
+      this.moveSpeed = clamp(this.moveSpeed, this.minMoveSpeed, this.maxMoveSpeed)
+      return null
     }
 
-    if (event.button === MOUSEMAPPING.RIGHT) {
-      this.disable()
-    }
+    this._dollyCamera(event.deltaY)
   }
-  _processPointerLockChangeEvent() {
-    // specific handling in case disable() wasn't triggered via RMB (e.g. user pressed ESC)
-    // this is necessary because there is an explicit delay between when we can allow user
-    // to re-enter pointer lock.
-    // https://discourse.threejs.org/t/how-to-avoid-pointerlockcontrols-error/33017/2
-    if (!document.pointerLockElement && this.isEnabled()) {
-      this.disable()
-      this.lastEscFromPointerLock = performance.now()
-    }
-  }
-  _processMouseUpEvent(event) {
-    // Can use this function if wanna enable/disable via hold instead of toggle
+  _processContextMenuEvent(event) {
+    if (!this.enabled) return null
+
+    event.preventDefault()
   }
   _processKeyEvent(event) {
+    if (!this.allowInput) return null
+    if (this._isTypingTarget(event.target)) return null
+
     this._processKey(event.keyCode, event.type === 'keydown')
+  }
+  _isTypingTarget(target) {
+    if (!target) return false
+    if (target.isContentEditable === true) return true
+    return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+  }
+  _isMovementKeyHeld() {
+    return (this._keyState.press & (FORWARD | BACK | LEFT | RIGHT | UP | DOWN)) !== 0
   }
   _processKey(key, isPressed) {
     const { press } = this._keyState
@@ -132,35 +201,31 @@ export class SpectatorControls {
   }
   listen() {
     this.domElement.addEventListener('mousedown', this._processMouseDownEvent)
-    this.domElement.addEventListener('mouseup', this._processMouseUpEvent)
-    document.addEventListener('pointerlockchange', this._processPointerLockChangeEvent)
+    this.domElement.addEventListener('wheel', this._processWheelEvent, { passive: false })
+    this.domElement.addEventListener('contextmenu', this._processContextMenuEvent)
   }
   unlisten() {
     this.domElement.removeEventListener('mousedown', this._processMouseDownEvent)
-    this.domElement.removeEventListener('mouseup', this._processMouseUpEvent)
-    document.removeEventListener('pointerlockchange', this._processPointerLockChangeEvent)
+    this.domElement.removeEventListener('wheel', this._processWheelEvent)
+    this.domElement.removeEventListener('contextmenu', this._processContextMenuEvent)
   }
   enable() {
-    if (!this.allowPointerLock) return null
     if (this.isEnabled()) return null
-    document.addEventListener('mousemove', this._processMouseMoveEvent)
     document.addEventListener('keydown', this._processKeyEvent)
     document.addEventListener('keyup', this._processKeyEvent)
     this.enabled = true
     this.camera.rotation.reorder('ZYX')
-    this.domElement.requestPointerLock({ unadjustedMovement: true })
   }
   disable() {
     if (!this.isEnabled()) return null
-    document.removeEventListener('mousemove', this._processMouseMoveEvent)
     document.removeEventListener('keydown', this._processKeyEvent)
     document.removeEventListener('keyup', this._processKeyEvent)
+    this._processMouseUpEvent()
     this.enabled = false
     this._keyState.press = 0
     this._keyState.prevPress = 0
     this._mouseState = { x: 0, y: 0 }
     this.camera.rotation.reorder('XYZ')
-    document.exitPointerLock()
   }
   isEnabled() {
     return this.enabled
@@ -168,7 +233,6 @@ export class SpectatorControls {
   dispose() {
     this.unlisten()
     this.disable()
-    document.exitPointerLock()
   }
   update(delta = 1) {
     if (!this.enabled) {
@@ -192,22 +256,26 @@ export class SpectatorControls {
 
     this._mouseState = { x: 0, y: 0 }
 
-    // movements
+    // movements: WASD stays in the ground plane, E and Q move along the world up axis
     let actualMoveSpeed = delta * this.moveSpeed
-    const velocity = this._moveState.velocity.clone()
     const { press } = this._keyState
 
     if (press & SPRINT) actualMoveSpeed *= this.sprintMultiplier
-    if (press & FORWARD) velocity.z = -actualMoveSpeed
-    if (press & BACK) velocity.z = actualMoveSpeed
-    if (press & LEFT) velocity.x = -actualMoveSpeed
-    if (press & RIGHT) velocity.x = actualMoveSpeed
 
-    if (press & UP) {
-      velocity.add(this._applyCameraInverse(new THREE.Vector3(0, 0, actualMoveSpeed)))
-    }
-    if (press & DOWN) {
-      velocity.add(this._applyCameraInverse(new THREE.Vector3(0, 0, -actualMoveSpeed)))
+    const desired = new THREE.Vector3(0, 0, 0)
+    const forward = this._groundForward()
+    const right = this._groundRight()
+
+    if (press & FORWARD) desired.add(forward)
+    if (press & BACK) desired.sub(forward)
+    if (press & RIGHT) desired.add(right)
+    if (press & LEFT) desired.sub(right)
+    if (press & UP) desired.z += 1
+    if (press & DOWN) desired.z -= 1
+
+    const velocity = this._moveState.velocity.clone()
+    if (desired.lengthSq() > 0) {
+      velocity.copy(desired.setLength(actualMoveSpeed))
     }
 
     this._moveCamera(velocity)
@@ -215,11 +283,39 @@ export class SpectatorControls {
     this._moveState.velocity = velocity
     this._keyState.prevPress = press
   }
-  _applyCameraInverse(vector) {
-    const quat = new THREE.Quaternion()
-    quat.setFromEuler(this.camera.rotation)
-    quat.invert()
-    return vector.clone().applyQuaternion(quat)
+  _groundForward() {
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
+    forward.z = 0
+
+    // Looking straight down leaves no heading, so take it from the camera's own up axis instead
+    if (forward.lengthSq() < 1e-8) {
+      forward.set(0, 1, 0).applyQuaternion(this.camera.quaternion)
+      forward.z = 0
+    }
+
+    return forward.normalize()
+  }
+  _groundRight() {
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
+    right.z = 0
+    return right.normalize()
+  }
+  _panCamera(deltaX, deltaY, vertical) {
+    const right = this._groundRight()
+
+    this.camera.position.addScaledVector(right, -deltaX * this.panSpeed)
+
+    if (vertical) {
+      this.camera.position.z += deltaY * this.panSpeed
+    } else {
+      this.camera.position.addScaledVector(this._groundForward(), deltaY * this.panSpeed)
+    }
+  }
+  _dollyCamera(deltaY) {
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
+    const distance = -Math.sign(deltaY) * this.moveSpeed * this.dollyStep
+
+    this.camera.position.addScaledVector(direction, distance)
   }
   _moveCamera(velocity) {
     let maxSpeed = this.moveSpeed
@@ -229,9 +325,7 @@ export class SpectatorControls {
 
     velocity.multiplyScalar(this.friction)
     velocity.clampLength(0, maxSpeed)
-    this.camera.translateZ(velocity.z)
-    this.camera.translateX(velocity.x)
-    this.camera.translateY(velocity.y)
+    this.camera.position.add(velocity)
   }
   mapKey(key, action) {
     this.keyMapping = Object.assign({}, this.keyMapping, { [key]: action })

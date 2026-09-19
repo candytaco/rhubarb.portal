@@ -172,11 +172,11 @@ export const AboutPanel = () => {
 
           <div className="grid grid-cols-[auto,1fr] gap-y-1">
             {[
-              ['Left Mouse', 'Rotate camera'],
-              ['Right Mouse', 'Pan camera'],
+              ['Left Mouse', 'Pan camera in the ground plane'],
+              ['Right Mouse', 'Rotate camera'],
               ['Middle Mouse', 'Pan camera up, down, left and right'],
               ['WASD', 'Move camera in the ground plane'],
-              ['Q / E', 'Move camera up / down'],
+              ['E / Q', 'Move camera up / down'],
               ['Scroll', 'Zoom, or movement speed while a movement key is held'],
               ['1 / 2 / 3', 'Bot POV / free camera / overview camera'],
               ['F', 'Drawing tools'],
