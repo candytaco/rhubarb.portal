@@ -83,6 +83,9 @@ export function portalQuaternion(angles: { x: number; y: number; z: number }): T
     yaw: angles.y,
     roll: angles.z,
   })
-  const basis = new THREE.Matrix4().makeBasis(right, up, forward)
+  // Source's right, up, forward form a left-handed triple (right x up = -forward), which is a
+  // reflection rather than a rotation; negating right gives the proper basis whose local +Z is
+  // the portal's forward
+  const basis = new THREE.Matrix4().makeBasis(right.clone().negate(), up, forward)
   return new THREE.Quaternion().setFromRotationMatrix(basis)
 }
