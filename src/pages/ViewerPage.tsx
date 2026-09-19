@@ -8,11 +8,7 @@ import { UrlDemoNotice } from '@components/Misc/UrlDemoNotice'
 import { DemoDrawing } from '@components/Misc/DemoDrawing'
 import { DemoViewer } from '@components/DemoViewer'
 import { SessionSidebar } from '@components/UI/SessionSidebar'
-import {
-  POVCameraTipPanel,
-  SpectatorCameraTipPanel,
-  RtsCameraTipPanel,
-} from '@components/UI/CameraTipPanels'
+import { POVCameraTipPanel, SpectatorCameraTipPanel } from '@components/UI/CameraTipPanels'
 
 import { useStore, useInstance } from '@zus/store'
 import { applySetupAction } from '@zus/actions'
@@ -117,7 +113,6 @@ const ViewerPage = () => {
           <div className="ui-layer pointer-events-none bottom-0 right-0 items-end justify-end overflow-hidden p-4 [&>div]:pointer-events-none">
             <POVCameraTipPanel />
             <SpectatorCameraTipPanel />
-            <RtsCameraTipPanel />
           </div>
         )}
 

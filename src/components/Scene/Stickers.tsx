@@ -79,8 +79,7 @@ export const Stickers = () => {
     return null
   }
 
-  const interactionEnabled =
-    controlsMode === ControlsMode.RTS || controlsMode === ControlsMode.SPECTATOR
+  const interactionEnabled = controlsMode === ControlsMode.SPECTATOR
 
   useEffect(() => {
     if (!interactionEnabled || stickerDrag.active) return

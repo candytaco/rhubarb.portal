@@ -179,10 +179,6 @@ export type StoreState = {
       fov: number
     }
     controls: {
-      panSpeed: number
-      rotateSpeed: number
-      zoomSpeed: number
-      enableDamping: boolean
       lookSpeed: number
       moveSpeed: number
     }
@@ -275,12 +271,6 @@ export const initialState: StoreState = {
       fov: 90,
     },
     controls: {
-      // RTS camera settings
-      panSpeed: 5,
-      rotateSpeed: 3,
-      zoomSpeed: 5,
-      enableDamping: true,
-
       // Spectator camera settings
       lookSpeed: 3,
       moveSpeed: 5,

@@ -17,7 +17,6 @@ export const ParserStatus = {
 export type ParserStatus = (typeof ParserStatus)[keyof typeof ParserStatus]
 
 export const ControlsMode = {
-  RTS: 'rts',
   POV: 'pov',
   SPECTATOR: 'spectator',
 } as const
@@ -81,19 +80,13 @@ export type UIPanelType = (typeof UIPanelType)[keyof typeof UIPanelType]
 // Version 1 setups carried TF2 class stickers and are dropped on load
 export const SETUP_STORAGE_VERSION = 2 as const
 
-export type SetupRtsCamera = {
-  mode: 'rts'
-  position: [number, number, number]
-  target: [number, number, number]
-}
-
 export type SetupSpectatorCamera = {
   mode: 'spectator'
   position: [number, number, number]
   quaternion: [number, number, number, number]
 }
 
-export type SavedSetupCamera = SetupRtsCamera | SetupSpectatorCamera
+export type SavedSetupCamera = SetupSpectatorCamera
 
 export type SavedSetup = {
   id: string

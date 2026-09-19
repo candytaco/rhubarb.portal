@@ -10,9 +10,7 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 
 const SETUP_HASH_PARAM = 's'
 
-type CameraWire =
-  | ['r', [number, number, number], [number, number, number]]
-  | ['s', [number, number, number], [number, number, number, number]]
+type CameraWire = ['s', [number, number, number], [number, number, number, number]]
 
 type StickerWire =
   | ['p', 'b' | 'o', [number, number, number]]
@@ -63,14 +61,6 @@ export function createSetupId(): string {
 }
 
 export function cloneSetupCamera(camera: SavedSetupCamera): SavedSetupCamera {
-  if (camera.mode === 'rts') {
-    return {
-      mode: 'rts',
-      position: [...camera.position] as [number, number, number],
-      target: [...camera.target] as [number, number, number],
-    }
-  }
-
   return {
     mode: 'spectator',
     position: [...camera.position] as [number, number, number],
@@ -205,16 +195,6 @@ function normalizeStoredCamera(rawValue: unknown): SavedSetupCamera | null {
 
   const candidate = rawValue as SavedSetupCamera
 
-  if (candidate.mode === 'rts') {
-    return isNumberTuple(candidate.position, 3) && isNumberTuple(candidate.target, 3)
-      ? {
-          mode: 'rts',
-          position: [...candidate.position] as [number, number, number],
-          target: [...candidate.target] as [number, number, number],
-        }
-      : null
-  }
-
   if (candidate.mode === 'spectator') {
     return isNumberTuple(candidate.position, 3) && isNumberTuple(candidate.quaternion, 4)
       ? {
@@ -268,14 +248,6 @@ function normalizeStoredSticker(rawValue: unknown): StickerAnnotation | null {
 }
 
 function encodeCamera(camera: SavedSetupCamera): CameraWire {
-  if (camera.mode === 'rts') {
-    return [
-      'r',
-      roundTuple(camera.position, 1, 3) as [number, number, number],
-      roundTuple(camera.target, 1, 3) as [number, number, number],
-    ]
-  }
-
   return [
     's',
     roundTuple(camera.position, 1, 3) as [number, number, number],
@@ -289,14 +261,6 @@ function decodeCamera(rawValue: unknown): SavedSetupCamera | null {
   }
 
   const [mode, position, extra] = rawValue
-
-  if (mode === 'r' && isNumberTuple(position, 3) && isNumberTuple(extra, 3)) {
-    return {
-      mode: 'rts',
-      position: [...position] as [number, number, number],
-      target: [...extra] as [number, number, number],
-    }
-  }
 
   if (mode === 's' && isNumberTuple(position, 3) && isNumberTuple(extra, 4)) {
     return {

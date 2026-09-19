@@ -230,6 +230,34 @@ export class Portal2CoopDemoFilesParser implements EntityTimeSeriesSource {
     )
   }
 
+  tractorBeamHistories(): HistoryGroups {
+    return EntityTimeSeries.mergeHistoryGroups(
+      this.player1Parser.tractorBeamHistories(),
+      this.player2Parser.tractorBeamHistories()
+    )
+  }
+
+  tractorBeamProjectorHistories(): HistoryGroups {
+    return EntityTimeSeries.mergeHistoryGroups(
+      this.player1Parser.tractorBeamProjectorHistories(),
+      this.player2Parser.tractorBeamProjectorHistories()
+    )
+  }
+
+  turretHistories(): HistoryGroups {
+    return EntityTimeSeries.mergeHistoryGroups(
+      this.player1Parser.turretHistories(),
+      this.player2Parser.turretHistories()
+    )
+  }
+
+  fizzlerHistories(): HistoryGroups {
+    return EntityTimeSeries.mergeHistoryGroups(
+      this.player1Parser.fizzlerHistories(),
+      this.player2Parser.fizzlerHistories()
+    )
+  }
+
   /** Server ticks of the rows of every time series, those covered by both demos */
   tickAxis(): Int32Array {
     return this.getSynchronizedServerTicks()
@@ -307,6 +335,22 @@ export class Portal2CoopDemoFilesParser implements EntityTimeSeriesSource {
 
   getBridgeStates(): Map<string, Matrix> {
     return this.timeSeries.getBridgeStates()
+  }
+
+  getTractorBeamStates(): Map<string, Matrix> {
+    return this.timeSeries.getTractorBeamStates()
+  }
+
+  getTractorBeamProjectorStates(): Map<string, Matrix> {
+    return this.timeSeries.getTractorBeamProjectorStates()
+  }
+
+  getTurretStates(): Map<string, Matrix> {
+    return this.timeSeries.getTurretStates()
+  }
+
+  getFizzlerStates(): Map<string, Matrix> {
+    return this.timeSeries.getFizzlerStates()
   }
 
   getPortalTraversals(): Matrix {

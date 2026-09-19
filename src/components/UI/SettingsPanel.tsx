@@ -224,45 +224,6 @@ export const SettingsPanel = () => {
             </div>
           )}
 
-          <Option label="RTS Camera" keyCode="3" />
-
-          {scene.controls.mode === 'rts' && (
-            <div className="ml-3">
-              <SliderOption
-                label="- FOV"
-                min={50}
-                max={120}
-                step={1}
-                value={settings.camera.fov}
-                onChange={value => updateSettingsOption('camera.fov', value)}
-              />
-
-              <SliderOption
-                label="- Pan speed"
-                value={settings.controls.panSpeed}
-                onChange={value => updateSettingsOption('controls.panSpeed', value)}
-              />
-
-              <SliderOption
-                label="- Rotate speed"
-                value={settings.controls.rotateSpeed}
-                onChange={value => updateSettingsOption('controls.rotateSpeed', value)}
-              />
-
-              <SliderOption
-                label="- Zoom speed"
-                value={settings.controls.zoomSpeed}
-                onChange={value => updateSettingsOption('controls.zoomSpeed', value)}
-              />
-
-              <ToggleOption
-                label="- Inertia enabled"
-                checked={settings.controls.enableDamping}
-                onChange={checked => updateSettingsOption('controls.enableDamping', checked)}
-              />
-            </div>
-          )}
-
           {/* ************************************************************* */}
 
           <div className="mb-4 mt-16 text-xs font-black uppercase opacity-60">Scene</div>

@@ -9,8 +9,6 @@ import { BlendFunction } from 'postprocessing'
 
 // Scene items
 // @ts-ignore
-import { RtsControls } from '@components/Controls/RtsControls'
-// @ts-ignore
 import { SpectatorControls } from '@components/Controls/SpectatorControls'
 import { CanvasKeyHandler } from '@components/Scene/CanvasKeyHandler'
 import { Lights } from '@components/Scene/Lights'
@@ -65,11 +63,9 @@ THREE.Object3D.DEFAULT_UP.set(0, 0, 1)
 THREE.Cache.enabled = true
 
 // Basic controls for our scene
-extend({ RtsControls, SpectatorControls })
+extend({ SpectatorControls })
 
 const SPECTATOR_CAMERA_OFFSET = new THREE.Vector3(0, 45, 150)
-const RTS_CAMERA_OFFSET = new THREE.Vector3(0, 250, 1000)
-const RTS_TARGET_DISTANCE = 1500
 const ENABLE_DEBUG_MAP_OFFSET = false
 const MARKER_COLOR = '#37ff5f'
 // portal rings stay highlighted this many axis rows after something went through them
@@ -105,7 +101,6 @@ const getFocusedViewTransform = (focusedObject?: THREE.Object3D) => {
 // This component is messy af but whatever yolo
 const Controls = () => {
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
-  const controlsRef = useRef<any>()
   const spectatorRef = useRef<any>()
   const pendingSetupCameraRef = useRef<SavedSetupCamera | null>(null)
   const skipSpectatorAutoEnableRef = useRef(false)
@@ -116,7 +111,6 @@ const Controls = () => {
   const bounds = useStore(state => state.scene.bounds)
   const drawingEnabled = useStore(state => state.drawing.enabled)
   const drawingTool = useStore(state => state.drawing.tool)
-  const stickerDragActive = useStore(state => state.drawing.stickerDrag.active)
   const focusedObject = useInstance(state => state.focusedObject)
   const lastFocusedPOV = useInstance(state => state.lastFocusedPOV)
   const isStickersToolActive = drawingEnabled && drawingTool === DrawingTool.STICKERS
@@ -146,32 +140,13 @@ const Controls = () => {
     const newPos = focusedView?.position ?? bounds.defaultRtsCenter
     let cameraOffset = bounds.defaultCameraOffset
 
-    if (focusedView) {
-      if (controlsMode === 'rts') {
-        cameraOffset = RTS_CAMERA_OFFSET.clone().applyQuaternion(focusedView.quaternion)
-      }
-
-      if (controlsMode === 'spectator') {
-        cameraOffset = SPECTATOR_CAMERA_OFFSET.clone().applyQuaternion(focusedView.quaternion)
-      }
+    if (focusedView && controlsMode === 'spectator') {
+      cameraOffset = SPECTATOR_CAMERA_OFFSET.clone().applyQuaternion(focusedView.quaternion)
     }
 
     cameraRef.current.position.copy(newPos).add(cameraOffset)
     cameraRef.current.near = 10
     cameraRef.current.far = settings.ui.viewDistance || 15000
-
-    if (controlsMode === 'rts' && controlsRef.current) {
-      const nextTarget = focusedView
-        ? cameraRef.current.position
-            .clone()
-            .add(focusedView.direction.clone().multiplyScalar(RTS_TARGET_DISTANCE))
-        : bounds.defaultRtsCenter.clone()
-
-      controlsRef.current.target.copy(nextTarget)
-      cameraRef.current.lookAt(nextTarget)
-      controlsRef.current.update()
-      controlsRef.current.saveState()
-    }
 
     if (controlsMode === 'spectator' && spectatorRef.current) {
       // Ground-grab panning measures its drag distance against the map floor
@@ -200,11 +175,6 @@ const Controls = () => {
   }, [settings.ui.viewDistance])
 
   useEffect(() => {
-    if (!controlsRef.current) return
-    controlsRef.current.enabled = !stickerDragActive
-  }, [stickerDragActive, controlsMode])
-
-  useEffect(() => {
     if (!spectatorRef.current) return
 
     spectatorRef.current.allowInput = !isStickersToolActive
@@ -223,14 +193,6 @@ const Controls = () => {
 
   const captureSetupCamera = useCallback((): SavedSetupCamera | null => {
     if (!cameraRef.current) return null
-
-    if (controlsMode === ControlsMode.RTS && controlsRef.current) {
-      return {
-        mode: 'rts',
-        position: vector3ToTuple(cameraRef.current.position),
-        target: vector3ToTuple(controlsRef.current.target),
-      }
-    }
 
     if (controlsMode === ControlsMode.SPECTATOR) {
       return {
@@ -261,18 +223,6 @@ const Controls = () => {
 
     const pendingCamera = pendingSetupCameraRef.current
 
-    if (pendingCamera.mode === 'rts') {
-      if (controlsMode !== ControlsMode.RTS || !controlsRef.current) return false
-
-      cameraRef.current.position.set(...pendingCamera.position)
-      controlsRef.current.target.set(...pendingCamera.target)
-      cameraRef.current.lookAt(controlsRef.current.target)
-      controlsRef.current.update()
-      controlsRef.current.saveState()
-      pendingSetupCameraRef.current = null
-      return true
-    }
-
     if (controlsMode !== ControlsMode.SPECTATOR) return false
 
     // Disabling restores the XYZ rotation order so the saved quaternion applies cleanly; enabling
@@ -289,17 +239,9 @@ const Controls = () => {
   const applySetupCamera = useCallback(
     (camera: SavedSetupCamera) => {
       pendingSetupCameraRef.current = camera
+      skipSpectatorAutoEnableRef.current = true
 
-      if (camera.mode === 'spectator') {
-        skipSpectatorAutoEnableRef.current = true
-      }
-
-      if (camera.mode === 'rts' && controlsMode !== ControlsMode.RTS) {
-        changeControlsModeAction(ControlsMode.RTS)
-        return
-      }
-
-      if (camera.mode === 'spectator' && controlsMode !== ControlsMode.SPECTATOR) {
+      if (controlsMode !== ControlsMode.SPECTATOR) {
         changeControlsModeAction(ControlsMode.SPECTATOR)
         return
       }
@@ -325,15 +267,9 @@ const Controls = () => {
   }, [bounds, controlsMode, tryApplyPendingSetupCamera])
 
   useFrame(() => {
-    if (controlsRef.current) controlsRef.current.update()
     if (spectatorRef.current) spectatorRef.current.update()
 
-    if (
-      ENABLE_DEBUG_MAP_OFFSET &&
-      controlsMode === 'rts' &&
-      controlsRef.current &&
-      cameraRef.current
-    ) {
+    if (ENABLE_DEBUG_MAP_OFFSET && controlsMode === 'spectator' && cameraRef.current) {
       useInstance.getState().setMapOffsetDebug({
         cameraOffset: roundOffset(
           cameraRef.current.position.x - bounds.defaultRtsCenter.x,
@@ -353,17 +289,6 @@ const Controls = () => {
         makeDefault
         {...settings.camera}
       />
-
-      {controlsMode === 'rts' && cameraRef.current && (
-        // @ts-ignore
-        <rtsControls
-          ref={controlsRef}
-          name="rts"
-          attach="controls"
-          args={[cameraRef.current, gl.domElement]}
-          {...settings.controls}
-        />
-      )}
 
       {controlsMode === 'spectator' && cameraRef.current && (
         // @ts-ignore

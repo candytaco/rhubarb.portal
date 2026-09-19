@@ -30,7 +30,7 @@ export interface SessionPlayer {
   demoIndex: number | null
   /** [ticks x PlayerDescriptorCount] row-major, columns as PlayerDescriptor */
   state: Float32Array
-  /** [ticks x 6]: eye x, y, z, pitch, yaw, roll from the CmdInfo blocks of the player's own demo */
+  /** [ticks x 6]: view origin x, y, z (at the feet), pitch, yaw, roll from the CmdInfo blocks of the player's own demo */
   view: Float32Array | null
 }
 
@@ -112,6 +112,10 @@ export interface Portal2Session {
   doors: SessionEntitySeries[]
   lasers: SessionEntitySeries[]
   bridges: SessionEntitySeries[]
+  tractorBeams: SessionEntitySeries[]
+  tractorBeamProjectors: SessionEntitySeries[]
+  turrets: SessionEntitySeries[]
+  fizzlers: SessionEntitySeries[]
   events: SessionEvent[]
   chat: SessionChatMessage[]
   ttlRows: Int32Array
@@ -153,6 +157,10 @@ export function sessionTransferables(session: Portal2Session): ArrayBufferLike[]
     ...session.doors,
     ...session.lasers,
     ...session.bridges,
+    ...session.tractorBeams,
+    ...session.tractorBeamProjectors,
+    ...session.turrets,
+    ...session.fizzlers,
   ]) {
     buffers.push(series.state.buffer)
   }

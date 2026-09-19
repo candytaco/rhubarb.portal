@@ -147,6 +147,10 @@ export function buildSession(
   const doors = toEntitySeries(timeSeries.getDoorStates())
   const lasers = toEntitySeries(timeSeries.getLaserStates())
   const bridges = toEntitySeries(timeSeries.getBridgeStates())
+  const tractorBeams = toEntitySeries(timeSeries.getTractorBeamStates())
+  const tractorBeamProjectors = toEntitySeries(timeSeries.getTractorBeamProjectorStates())
+  const turrets = toEntitySeries(timeSeries.getTurretStates())
+  const fizzlers = toEntitySeries(timeSeries.getFizzlerStates())
 
   // events
   const events: SessionEvent[] = []
@@ -387,6 +391,10 @@ export function buildSession(
     doors,
     lasers,
     bridges,
+    tractorBeams,
+    tractorBeamProjectors,
+    turrets,
+    fizzlers,
     events,
     chat,
     ttlRows: Int32Array.from(Array.from(ttlRows).sort((left, right) => left - right)),
@@ -456,7 +464,7 @@ function roleFromState(state: Matrix): PlayerRole {
 }
 
 /**
- * The recording player's eye position and view angles per axis row, from the CmdInfo blocks.
+ * The recording player's view origin (at the feet) and view angles per axis row, from the CmdInfo blocks.
  * Angles are unwrapped before interpolation so that yaw crossing 180 degrees does not spin.
  */
 function buildViewSeries(
@@ -620,6 +628,10 @@ function sessionBytes(session: Portal2Session): number {
     session.doors,
     session.lasers,
     session.bridges,
+    session.tractorBeams,
+    session.tractorBeamProjectors,
+    session.turrets,
+    session.fizzlers,
   ]) {
     for (const entry of group) total += entry.state.byteLength
   }

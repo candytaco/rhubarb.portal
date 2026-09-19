@@ -78,6 +78,9 @@ export const HazardServerClasses = {
   Laser: 'CPortalLaser',
   FloorTurret: 'CNPC_Portal_FloorTurret',
   LightBridge: 'CProjectedWallEntity',
+  TractorBeam: 'CProjectedTractorBeamEntity',
+  TractorBeamProjector: 'CPropTractorBeamProjector',
+  Fizzler: 'CTriggerPortalCleanser',
 } as const
 
 /** Server class names of the game rules proxies */
@@ -189,6 +192,16 @@ export const HazardProperties = {
   BridgeEndPoint: 'm_vecEndPoint',
   BridgeWidth: 'm_flWidth',
   BridgeIsHorizontal: 'm_bIsHorizontal',
+  // One tractor beam (excursion funnel) segment; its direction and polarity live on the projector
+  TractorBeamStartPoint: 'm_vecStartPoint',
+  TractorBeamEndPoint: 'm_vecEndPoint',
+  ProjectorLinearForce: 'm_flLinearForce',
+  ProjectorEnabled: 'm_bEnabled',
+  // One fizzler (emancipation grill) field: a trigger brush whose bounds are in the entity's frame
+  FizzlerMins: 'm_Collision.m_vecMins',
+  FizzlerMaxs: 'm_Collision.m_vecMaxs',
+  FizzlerDisabled: 'm_bDisabled',
+  FizzlerVisible: 'm_bVisible',
 } as const
 
 /** Network property names of the game rules proxies */
@@ -276,6 +289,27 @@ export const TrackedClassProperties: Record<string, string[]> = {
     HazardProperties.BridgeEndPoint,
     HazardProperties.BridgeWidth,
     HazardProperties.BridgeIsHorizontal,
+  ],
+  [HazardServerClasses.TractorBeam]: [
+    EntityProperties.Origin,
+    EntityProperties.Rotation,
+    EntityProperties.OwnerEntity,
+    HazardProperties.TractorBeamStartPoint,
+    HazardProperties.TractorBeamEndPoint,
+  ],
+  [HazardServerClasses.TractorBeamProjector]: [
+    EntityProperties.Origin,
+    EntityProperties.Rotation,
+    HazardProperties.ProjectorLinearForce,
+    HazardProperties.ProjectorEnabled,
+  ],
+  [HazardServerClasses.Fizzler]: [
+    EntityProperties.Origin,
+    EntityProperties.Rotation,
+    HazardProperties.FizzlerMins,
+    HazardProperties.FizzlerMaxs,
+    HazardProperties.FizzlerDisabled,
+    HazardProperties.FizzlerVisible,
   ],
   [GameRulesServerClasses.CooperativeGameRules]: [
     GameRulesProperties.CooperativeSectionIndex,
@@ -622,4 +656,78 @@ export const BridgeDescriptor = indexEnum(BridgeDescriptors, [
   'roll',
   'width',
   'horizontal',
+] as const)
+
+// Added for the viewer: one tractor beam segment, with the handle of the projector that owns it
+export const TractorBeamDescriptors = [
+  ...OriginDescriptors,
+  describe('startX', HazardProperties.TractorBeamStartPoint, { component: 0 }),
+  describe('startY', HazardProperties.TractorBeamStartPoint, { component: 1 }),
+  describe('startZ', HazardProperties.TractorBeamStartPoint, { component: 2 }),
+  describe('endX', HazardProperties.TractorBeamEndPoint, { component: 0 }),
+  describe('endY', HazardProperties.TractorBeamEndPoint, { component: 1 }),
+  describe('endZ', HazardProperties.TractorBeamEndPoint, { component: 2 }),
+  describe('projector', EntityProperties.OwnerEntity, { continuous: false, isHandle: true }),
+]
+export const TractorBeamDescriptor = indexEnum(TractorBeamDescriptors, [
+  'x',
+  'y',
+  'z',
+  'startX',
+  'startY',
+  'startZ',
+  'endX',
+  'endY',
+  'endZ',
+  'projector',
+] as const)
+
+// Added for the viewer: the tractor beam projector, whose linear force sign is the beam polarity
+export const TractorBeamProjectorDescriptors = [
+  ...OriginDescriptors,
+  describe('linearForce', HazardProperties.ProjectorLinearForce, { continuous: false }),
+  describe('enabled', HazardProperties.ProjectorEnabled, { continuous: false }),
+]
+export const TractorBeamProjectorDescriptor = indexEnum(TractorBeamProjectorDescriptors, [
+  'x',
+  'y',
+  'z',
+  'linearForce',
+  'enabled',
+] as const)
+
+// Added for the viewer: floor turrets share the door layout of an origin and a rotation
+export const TurretDescriptors = DoorDescriptors
+export const TurretDescriptor = DoorDescriptor
+
+// Added for the viewer: one fizzler field, a box given in the entity's frame by its collision bounds
+export const FizzlerDescriptors = [
+  ...OriginDescriptors,
+  describe('pitch', EntityProperties.Rotation, { component: 0 }),
+  describe('yaw', EntityProperties.Rotation, { component: 1 }),
+  describe('roll', EntityProperties.Rotation, { component: 2 }),
+  describe('minsX', HazardProperties.FizzlerMins, { component: 0 }),
+  describe('minsY', HazardProperties.FizzlerMins, { component: 1 }),
+  describe('minsZ', HazardProperties.FizzlerMins, { component: 2 }),
+  describe('maxsX', HazardProperties.FizzlerMaxs, { component: 0 }),
+  describe('maxsY', HazardProperties.FizzlerMaxs, { component: 1 }),
+  describe('maxsZ', HazardProperties.FizzlerMaxs, { component: 2 }),
+  describe('disabled', HazardProperties.FizzlerDisabled, { continuous: false }),
+  describe('visible', HazardProperties.FizzlerVisible, { continuous: false }),
+]
+export const FizzlerDescriptor = indexEnum(FizzlerDescriptors, [
+  'x',
+  'y',
+  'z',
+  'pitch',
+  'yaw',
+  'roll',
+  'minsX',
+  'minsY',
+  'minsZ',
+  'maxsX',
+  'maxsY',
+  'maxsZ',
+  'disabled',
+  'visible',
 ] as const)

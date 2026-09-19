@@ -178,7 +178,7 @@ export const AboutPanel = () => {
               ['WASD', 'Move camera in the ground plane'],
               ['E / Q', 'Move camera up / down'],
               ['Scroll', 'Movement speed while a movement key is held'],
-              ['1 / 2 / 3', 'Bot POV / free camera / overview camera'],
+              ['1 / 2', 'Bot POV / free camera'],
               ['F', 'Drawing tools'],
             ].map(([key, value]) => (
               <React.Fragment key={`controls-${value}`}>

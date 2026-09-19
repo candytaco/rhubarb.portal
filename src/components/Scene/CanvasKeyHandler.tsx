@@ -87,12 +87,6 @@ export const CanvasKeyHandler = () => {
             keysHeld.current.set('2', true)
             changeControlsModeAction('spectator')
             break
-
-          case '3':
-            if (keysHeld.current.has('3')) return null // Prevent rapid camera cycling
-            keysHeld.current.set('3', true)
-            changeControlsModeAction('rts')
-            break
         }
       } catch (error) {
         console.error(error)
@@ -109,10 +103,6 @@ export const CanvasKeyHandler = () => {
 
       case '2':
         keysHeld.current.delete('2')
-        break
-
-      case '3':
-        keysHeld.current.delete('3')
         break
     }
   }, [])

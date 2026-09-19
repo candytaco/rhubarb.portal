@@ -130,7 +130,10 @@ export function cameraQuaternionFromSourceAnglesDeg(angles: SourceAnglesDeg): TH
  * Yaw-only quaternion for body rotation (rotation around Z axis).
  */
 export function yawQuaternionFromDegrees(yawDeg: number): THREE.Quaternion {
-  return new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), degreesToRadians(yawDeg))
+  return new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 0, 1),
+    degreesToRadians(yawDeg)
+  )
 }
 
 /**
@@ -182,9 +185,7 @@ export function guardedLerpProgress(
   let lerpProgress = Math.min(Math.max(frameProgress, 0), 0.999)
 
   const posChanged =
-    position.x !== guard.posX ||
-    position.y !== guard.posY ||
-    position.z !== guard.posZ
+    position.x !== guard.posX || position.y !== guard.posY || position.z !== guard.posZ
 
   if (posChanged || !playing) {
     guard.isStale = false
@@ -225,4 +226,14 @@ export const getMeshes = (sceneObjects: THREE.Object3D[], meshName: string = '')
   })
 
   return meshes
+}
+
+/**
+ * Build a Three.js quaternion for a placed object such that its local +X is Source forward,
+ * local +Y is Source left and local +Z is Source up, which is a proper right-handed basis
+ */
+export function objectQuaternionFromSourceAnglesDeg(angles: SourceAnglesDeg): THREE.Quaternion {
+  const { forward, right, up } = angleVectorsFromSourceAnglesDeg(angles)
+  const basis = new THREE.Matrix4().makeBasis(forward, right.clone().negate(), up)
+  return new THREE.Quaternion().setFromRotationMatrix(basis)
 }

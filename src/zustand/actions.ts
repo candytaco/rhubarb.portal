@@ -144,7 +144,7 @@ export const loadSceneFromSessionAction = async (session: Portal2Session) => {
           mapAssetsAvailable: modelWorldBounds !== null,
           bounds: parseMapBoundaries({ ...boundaries, rtsCenter }),
           controls: {
-            mode: 'rts',
+            mode: 'spectator',
           },
         },
         playback: {
@@ -246,7 +246,7 @@ export const changeControlsModeAction = async (
 
       nextActor = actors[nextIndex]
 
-      // Player transitioned from RTS to POV
+      // Player transitioned from the free camera to POV
       // So we should go back to the POV of the last person they spectated
       if (focusedObject === undefined) {
         const entityId = lastFocusedPOV?.userData?.entityId ?? actors[0]?.userData?.entityId
@@ -262,16 +262,12 @@ export const changeControlsModeAction = async (
       }
 
       // No actors found in the scene
-      // Just reset back to RTS camera
-      jumpToRtsCamera()
+      // Just reset back to the free camera
+      jumpToSpectatorCamera()
     }
 
     if (mode === ControlsMode.SPECTATOR) {
       jumpToSpectatorCamera()
-    }
-
-    if (mode === ControlsMode.RTS) {
-      jumpToRtsCamera()
     }
   } catch (error) {
     console.error(error)
@@ -300,16 +296,6 @@ export const jumpToPlayerPOVCamera = async (entityId: number) => {
 export const jumpToSpectatorCamera = async () => {
   try {
     dispatch({ type: 'CHANGE_CONTROLS_MODE', payload: 'spectator' })
-
-    useInstance.getState().setFocusedObject(undefined)
-  } catch (error) {
-    console.error(error)
-  }
-}
-
-export const jumpToRtsCamera = async () => {
-  try {
-    dispatch({ type: 'CHANGE_CONTROLS_MODE', payload: 'rts' })
 
     useInstance.getState().setFocusedObject(undefined)
   } catch (error) {

@@ -4,12 +4,16 @@ import {
   BridgeDescriptor,
   CubeDescriptor,
   DoorDescriptor,
+  FizzlerDescriptor,
   FloorButtonDescriptor,
   LaserDescriptor,
   PlayerDescriptor,
   PlayerDescriptors,
   PortalDescriptor,
   PortalDescriptors,
+  TractorBeamDescriptor,
+  TractorBeamProjectorDescriptor,
+  TurretDescriptor,
 } from '../demofiles/Portal2/Structures'
 import type {
   Portal2Session,
@@ -36,7 +40,7 @@ export interface PlayerFrame {
   player: SessionPlayer
   /** feet origin, null when the player was not reported at this row */
   position: Vector | null
-  /** eye position: from the CmdInfo view when the player recorded a demo, else origin plus eye height */
+  /** eye position: the CmdInfo view origin (recorded at the feet) plus eye height when the player recorded a demo, else origin plus eye height */
   eyePosition: Vector | null
   /** pitch, yaw, roll in degrees */
   viewAngles: Vector
@@ -104,7 +108,7 @@ export function getPlayerFrame(
       eyePosition = {
         x: viewX,
         y: player.view[viewBase + ViewColumn.y],
-        z: player.view[viewBase + ViewColumn.z],
+        z: player.view[viewBase + ViewColumn.z] + EYE_HEIGHT_STANDING,
       }
       viewAngles = {
         x: player.view[viewBase + ViewColumn.pitch],
@@ -219,6 +223,10 @@ export const EntityColumns = {
   door: DoorDescriptor,
   laser: LaserDescriptor,
   bridge: BridgeDescriptor,
+  tractorBeam: TractorBeamDescriptor,
+  tractorBeamProjector: TractorBeamProjectorDescriptor,
+  turret: TurretDescriptor,
+  fizzler: FizzlerDescriptor,
 }
 
 export function portalColor(role: PlayerRole, portalNumber: 1 | 2): string {

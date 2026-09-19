@@ -758,6 +758,22 @@ export class Portal2DemoFileParser extends DemofileParser implements EntityTimeS
     return this.historiesOf([HazardServerClasses.LightBridge])
   }
 
+  tractorBeamHistories(): HistoryGroups {
+    return this.historiesOf([HazardServerClasses.TractorBeam])
+  }
+
+  tractorBeamProjectorHistories(): HistoryGroups {
+    return this.historiesOf([HazardServerClasses.TractorBeamProjector])
+  }
+
+  turretHistories(): HistoryGroups {
+    return this.historiesOf([HazardServerClasses.FloorTurret])
+  }
+
+  fizzlerHistories(): HistoryGroups {
+    return this.historiesOf([HazardServerClasses.Fizzler])
+  }
+
   /** Demo ticks of the rows of every time series, 0 to numTicks - 1 */
   tickAxis(): Int32Array {
     return arange(0, this.numTicks ?? 0)
@@ -823,6 +839,22 @@ export class Portal2DemoFileParser extends DemofileParser implements EntityTimeS
 
   getBridgeStates(): Map<string, Matrix> {
     return this.timeSeries.getBridgeStates()
+  }
+
+  getTractorBeamStates(): Map<string, Matrix> {
+    return this.timeSeries.getTractorBeamStates()
+  }
+
+  getTractorBeamProjectorStates(): Map<string, Matrix> {
+    return this.timeSeries.getTractorBeamProjectorStates()
+  }
+
+  getTurretStates(): Map<string, Matrix> {
+    return this.timeSeries.getTurretStates()
+  }
+
+  getFizzlerStates(): Map<string, Matrix> {
+    return this.timeSeries.getFizzlerStates()
   }
 
   getPortalTraversals(): Matrix {

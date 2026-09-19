@@ -30,6 +30,10 @@ import {
   HistoryFields,
   LaserDescriptors,
   BridgeDescriptors,
+  TractorBeamDescriptors,
+  TractorBeamProjectorDescriptors,
+  TurretDescriptors,
+  FizzlerDescriptors,
   PlayerDescriptor,
   PlayerDescriptors,
   PortalDescriptor,
@@ -72,6 +76,10 @@ export interface EntityTimeSeriesSource {
   doorHistories(): HistoryGroups
   laserHistories(): HistoryGroups
   bridgeHistories(): HistoryGroups
+  tractorBeamHistories(): HistoryGroups
+  tractorBeamProjectorHistories(): HistoryGroups
+  turretHistories(): HistoryGroups
+  fizzlerHistories(): HistoryGroups
   /** Ticks of the rows of every time series */
   tickAxis(): Int32Array
   /** Ticks at which entities were reported, on the tick axis clock, sorted */
@@ -390,6 +398,29 @@ export class EntityTimeSeries {
   /** Per-tick state of the light bridge segments, one [ticks x BridgeDescriptor] series per entity */
   getBridgeStates(): Map<string, Matrix> {
     return this.entitySeries(this.source.bridgeHistories(), BridgeDescriptors)
+  }
+
+  /** Per-tick state of the tractor beam segments, one series per entity */
+  getTractorBeamStates(): Map<string, Matrix> {
+    return this.entitySeries(this.source.tractorBeamHistories(), TractorBeamDescriptors)
+  }
+
+  /** Per-tick state of the tractor beam projectors, one series per entity */
+  getTractorBeamProjectorStates(): Map<string, Matrix> {
+    return this.entitySeries(
+      this.source.tractorBeamProjectorHistories(),
+      TractorBeamProjectorDescriptors
+    )
+  }
+
+  /** Per-tick state of the floor turrets, one series per entity */
+  getTurretStates(): Map<string, Matrix> {
+    return this.entitySeries(this.source.turretHistories(), TurretDescriptors)
+  }
+
+  /** Per-tick state of the fizzler fields, one series per entity */
+  getFizzlerStates(): Map<string, Matrix> {
+    return this.entitySeries(this.source.fizzlerHistories(), FizzlerDescriptors)
   }
 
   /** Portal traversals read from the entity-portalled messages, one row per traversal in tick order */

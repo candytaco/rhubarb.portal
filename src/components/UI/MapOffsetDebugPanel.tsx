@@ -60,9 +60,9 @@ export const MapOffsetDebugPanel = () => {
         </div>
       )}
 
-      {controlsMode !== ControlsMode.RTS && (
+      {controlsMode !== ControlsMode.SPECTATOR && (
         <div className="mb-2 max-w-[260px] opacity-60">
-          Switch to RTS camera to update these values live.
+          Switch to the free camera to update these values live.
         </div>
       )}
 
