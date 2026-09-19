@@ -6,6 +6,8 @@ The 3D viewport takes the left two thirds of a widescreen page. The right third 
 
 This is a fork of [dribble.tf](https://github.com/bryjch/dribble.tf) with the Team Fortress 2 parsing, models and UI replaced. The demo parser is a TypeScript port of the Portal 2 co-op parser in [gallantlab/DemoFiles](https://github.com/gallantlab/DemoFiles) (`src/demofiles`), which follows [NeKzor/sdp](https://github.com/NeKzor/sdp) for the demo format and [UncraftedName/UntitledParser](https://github.com/UncraftedName/UntitledParser) for entity decoding. The plan, the deviations from the Python reference and the remaining work are in `specs/portal2-coop-replacement.md`.
 
+![alt text](image.png)
+
 ### Running
 
 ```
@@ -26,10 +28,6 @@ node --experimental-strip-types scripts/portal2/dump-demo.mts <demo.dem> [<partn
 ```
 
 The script prints the header, frame and message inventories, string tables, game events, the players and their first recorded state, and, with a partner demo, the merged server tick axis. The expected values for the public sdp demos are listed in section 6 of the spec.
-
-### Map and bot assets
-
-Map geometry is served from `public/models/maps/<map name>/` and the bot models from `public/models/players/atlas.glb` and `pbody.glb`. Neither can be produced in a cloud environment because they need the Portal 2 game files, bspsrc and Blender. Until they exist, a map is shown as the recorded positions over a grid and the bots as capsules in their team colour. Section 5 of the spec describes the conversion steps with the existing `scripts/convert-map.mjs` pipeline.
 
 ### Credits
 
