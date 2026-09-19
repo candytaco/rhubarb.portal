@@ -175,9 +175,25 @@ export const AboutPanel = () => {
               ['Middle Mouse', 'Move camera in U/D/L/R'],
               ['WASD', 'Move'],
               ['E / Q', 'Move camera up / down'],
+              ['Shift', 'Boost movement speed while held'],
               ['Scroll', 'Movement speed'],
               ['1 / 2', '1: Cycle first-person view, 2: free camera'],
+              ['Shift + 1', 'Cycle first-person view backwards'],
+              ['Space', 'Play / pause'],
+              ['Left / Right', 'Seek backward / forward'],
+              [', / .', 'Previous / next tick'],
+              ['Up / Down', 'Playback speed faster / slower'],
+              ['M', 'Cycle map material: wireframe, untextured, textured'],
+              ['N', 'Toggle nameplates'],
+              ['O', 'Toggle player outlines'],
+              ['B', 'Toggle bookmark at the current tick'],
               ['F', 'Drawing tools'],
+              ['G', 'Stickers panel'],
+              ['C', 'Clear drawing, or clear stickers when the stickers panel is open'],
+              ['Z', 'Undo drawing, or undo stickers'],
+              ['Shift + Z', 'Redo stickers'],
+              ['Backspace / Delete', 'Delete the selected sticker'],
+              ['Esc', 'Close the open panel, drawing tools or stickers panel'],
             ].map(([key, value]) => (
               <React.Fragment key={`controls-${value}`}>
                 <div className="flex items-center">
@@ -194,8 +210,8 @@ export const AboutPanel = () => {
           <p className="mb-2 mt-10 text-xs font-black uppercase opacity-60">Co-op maps</p>
 
           <p className="mb-3 text-xs opacity-60">
-            Map geometry is served from <code>public/models/maps/&lt;map&gt;/</code> once converted;
-            maps without assets show the recorded positions over a grid.
+            A list of al maps in co-op mode. Some may not have have the bsps exported.
+            Maps without assets show the recorded positions over a grid.
           </p>
 
           <div className="grid grid-cols-2 gap-y-1 text-sm">
