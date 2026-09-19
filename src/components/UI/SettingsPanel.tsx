@@ -516,6 +516,11 @@ export const SettingsPanel = () => {
             checked={settings.ui.showSkybox}
             onChange={checked => updateSettingsOption('ui.showSkybox', checked)}
           />
+          <ToggleOption
+            label="See-through tunnels to players"
+            checked={settings.ui.showMapTunnels}
+            onChange={checked => updateSettingsOption('ui.showMapTunnels', checked)}
+          />
 
           <SliderOption
             label="Event log seek buffer (s)"

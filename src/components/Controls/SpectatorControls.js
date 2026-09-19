@@ -25,8 +25,8 @@ const MOVESPEED = 20
 const FRICTION = 0.8
 const LOOKSPEED = 5
 const SPRINTMULT = 3
-const PANSPEED = 2 // world units per pixel of mouse drag
-const DOLLYSTEP = 5 // multiples of moveSpeed per wheel notch
+const PANSPEED = 1 // multiplier on the ground-grab pan rate
+const FALLBACKPANDISTANCE = 1000 // pan reference distance when the view ray misses the ground plane
 const MOVESPEEDSTEP = 1.2
 const MINMOVESPEED = 2
 const MAXMOVESPEED = 320
@@ -52,7 +52,7 @@ export class SpectatorControls {
     this.lookSpeed = LOOKSPEED
     this.moveSpeed = MOVESPEED
     this.panSpeed = PANSPEED
-    this.dollyStep = DOLLYSTEP
+    this.groundZ = 0
     this.moveSpeedStep = MOVESPEEDSTEP
     this.minMoveSpeed = MINMOVESPEED
     this.maxMoveSpeed = MAXMOVESPEED
@@ -136,19 +136,16 @@ export class SpectatorControls {
 
     event.preventDefault()
 
-    // While a movement key is held the wheel sets how fast those keys move the camera
-    if (this._isMovementKeyHeld()) {
-      if (event.deltaY < 0) {
-        this.moveSpeed *= this.moveSpeedStep
-      } else if (event.deltaY > 0) {
-        this.moveSpeed /= this.moveSpeedStep
-      }
+    // The wheel only sets how fast the movement keys move the camera, and only while one is held
+    if (!this._isMovementKeyHeld()) return null
 
-      this.moveSpeed = clamp(this.moveSpeed, this.minMoveSpeed, this.maxMoveSpeed)
-      return null
+    if (event.deltaY < 0) {
+      this.moveSpeed *= this.moveSpeedStep
+    } else if (event.deltaY > 0) {
+      this.moveSpeed /= this.moveSpeedStep
     }
 
-    this._dollyCamera(event.deltaY)
+    this.moveSpeed = clamp(this.moveSpeed, this.minMoveSpeed, this.maxMoveSpeed)
   }
   _processContextMenuEvent(event) {
     if (!this.enabled) return null
@@ -256,14 +253,15 @@ export class SpectatorControls {
 
     this._mouseState = { x: 0, y: 0 }
 
-    // movements: WASD stays in the ground plane, E and Q move along the world up axis
+    // movements: W and S follow the camera's look vector, A and D strafe in the ground plane,
+    // E and Q move along the world up axis
     let actualMoveSpeed = delta * this.moveSpeed
     const { press } = this._keyState
 
     if (press & SPRINT) actualMoveSpeed *= this.sprintMultiplier
 
     const desired = new THREE.Vector3(0, 0, 0)
-    const forward = this._groundForward()
+    const forward = this._lookForward()
     const right = this._groundRight()
 
     if (press & FORWARD) desired.add(forward)
@@ -283,6 +281,9 @@ export class SpectatorControls {
     this._moveState.velocity = velocity
     this._keyState.prevPress = press
   }
+  _lookForward() {
+    return new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion).normalize()
+  }
   _groundForward() {
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
     forward.z = 0
@@ -300,22 +301,31 @@ export class SpectatorControls {
     right.z = 0
     return right.normalize()
   }
+  _panUnitsPerPixel() {
+    // Distance along the view ray to the ground plane, so a dragged ground point follows the
+    // cursor at any altitude; a ray that misses the plane uses a fixed reference distance
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
+    let distance = FALLBACKPANDISTANCE
+
+    if (direction.z < -1e-6) {
+      const hitDistance = (this.groundZ - this.camera.position.z) / direction.z
+      if (hitDistance > 0) distance = hitDistance
+    }
+
+    const halfHeight = distance * Math.tan((this.camera.fov / 2) * (Math.PI / 180))
+    return ((2 * halfHeight) / this.domElement.clientHeight) * this.panSpeed
+  }
   _panCamera(deltaX, deltaY, vertical) {
+    const unitsPerPixel = this._panUnitsPerPixel()
     const right = this._groundRight()
 
-    this.camera.position.addScaledVector(right, -deltaX * this.panSpeed)
+    this.camera.position.addScaledVector(right, -deltaX * unitsPerPixel)
 
     if (vertical) {
-      this.camera.position.z += deltaY * this.panSpeed
+      this.camera.position.z += deltaY * unitsPerPixel
     } else {
-      this.camera.position.addScaledVector(this._groundForward(), deltaY * this.panSpeed)
+      this.camera.position.addScaledVector(this._groundForward(), deltaY * unitsPerPixel)
     }
-  }
-  _dollyCamera(deltaY) {
-    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion)
-    const distance = -Math.sign(deltaY) * this.moveSpeed * this.dollyStep
-
-    this.camera.position.addScaledVector(direction, distance)
   }
   _moveCamera(velocity) {
     let maxSpeed = this.moveSpeed

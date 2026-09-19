@@ -14,6 +14,12 @@ import {
 } from '@zus/actions'
 import { getState, useInstance, useStore } from '@zus/store'
 import { getMapModelUrls, getMapVisibilityUrl } from '@utils/game'
+import {
+  MAP_TUNNEL_END_MARGIN,
+  MAP_TUNNEL_MAX_TARGETS,
+  MAP_TUNNEL_RADIUS,
+  PLAYER_HEIGHT,
+} from '@constants/portal2'
 
 const INVISIBLE_TOOL_MATERIALS = new Set([
   'toolsnodraw',
@@ -58,6 +64,70 @@ const MAP_UNTEXTURED_MATERIAL = new THREE.MeshStandardMaterial({
 })
 const MAP_CHUNKING_ENABLED = mapChunkingConfig.enabled
 
+// Uniforms shared by every map material, so one update per frame reaches all of them
+const mapTunnelUniforms = {
+  uTunnelCount: { value: 0 },
+  uTunnelTargets: {
+    value: Array.from({ length: MAP_TUNNEL_MAX_TARGETS }, () => new THREE.Vector3()),
+  },
+  uTunnelRadius: { value: MAP_TUNNEL_RADIUS },
+  uTunnelEndMargin: { value: MAP_TUNNEL_END_MARGIN },
+}
+
+/**
+ * Patch a map material so fragments inside a bot's view tunnel are discarded: within the tunnel
+ * radius of the line from the camera to the bot, and nearer to the camera than the bot. The
+ * camera position comes from the cameraPosition uniform three.js gives every material.
+ * @param material - Map material to patch; patched once, later calls are no-ops
+ */
+function applyMapTunnel(material: THREE.Material) {
+  if (material.userData.mapTunnel) return
+  material.userData.mapTunnel = true
+
+  material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, mapTunnelUniforms)
+
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTunnelWorldPosition;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvTunnelWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+      )
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+varying vec3 vTunnelWorldPosition;
+uniform int uTunnelCount;
+uniform vec3 uTunnelTargets[${MAP_TUNNEL_MAX_TARGETS}];
+uniform float uTunnelRadius;
+uniform float uTunnelEndMargin;`
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+for (int tunnelIndex = 0; tunnelIndex < ${MAP_TUNNEL_MAX_TARGETS}; tunnelIndex++) {
+  if (tunnelIndex >= uTunnelCount) break;
+  vec3 tunnelVector = uTunnelTargets[tunnelIndex] - cameraPosition;
+  float tunnelLength = length(tunnelVector);
+  vec3 tunnelAxis = tunnelVector / tunnelLength;
+  vec3 fromCamera = vTunnelWorldPosition - cameraPosition;
+  float along = dot(fromCamera, tunnelAxis);
+  if (along > 0.0 && along < tunnelLength - uTunnelEndMargin) {
+    vec3 radial = fromCamera - tunnelAxis * along;
+    if (dot(radial, radial) < uTunnelRadius * uTunnelRadius) discard;
+  }
+}`
+      )
+  }
+  material.customProgramCacheKey = () => 'mapTunnel'
+  material.needsUpdate = true
+}
+
+applyMapTunnel(MAP_WIREFRAME_MATERIAL)
+applyMapTunnel(MAP_UNTEXTURED_MATERIAL)
+
 export interface WorldProps {
   map: string
   mode?: 'textured' | 'untextured' | 'wireframe'
@@ -78,6 +148,7 @@ export const World = (props: WorldProps) => {
 
   const bounds = useStore(state => state.scene.bounds)
   const mapAssetsAvailable = useStore(state => state.scene.mapAssetsAvailable)
+  const showMapTunnels = useStore(state => state.settings.ui.showMapTunnels)
 
   // Briefly ensure the map is cleared when the map changes
   // to prevent lingering of the previous map
@@ -268,11 +339,35 @@ export const World = (props: WorldProps) => {
     })
   })
 
+  // Aim each bot's view tunnel every frame; the tunnel ends at the bot's chest height
+  useFrame(state => {
+    if (!showMapTunnels) {
+      mapTunnelUniforms.uTunnelCount.value = 0
+      return
+    }
+
+    const actorsGroup = state.scene.getObjectByName('actors')
+    const actors = actorsGroup ? actorsGroup.children.filter(child => child.name === 'actor') : []
+    let count = 0
+
+    for (const actor of actors) {
+      if (count >= MAP_TUNNEL_MAX_TARGETS) break
+
+      const target = mapTunnelUniforms.uTunnelTargets.value[count]
+      actor.getWorldPosition(target)
+      target.z += PLAYER_HEIGHT * 0.5
+      count++
+    }
+
+    mapTunnelUniforms.uTunnelCount.value = count
+  })
+
   // Update map overlay materials
   useEffect(() => {
     if (mapOverlay) {
       mapOverlay.traverse((child: THREE.Object3D) => {
         traverseMaterials(child, (material: any) => {
+          applyMapTunnel(material)
           // if (material.map) material.map.encoding = THREE.sRGBEncoding
           // if (material.emissiveMap) material.emissiveMap.encoding = THREE.sRGBEncoding
           material.depthWrite = true
@@ -313,6 +408,8 @@ export const World = (props: WorldProps) => {
             node.visible = false
             return
           }
+
+          applyMapTunnel(material)
 
           // if (material.map) material.map.encoding = THREE.sRGBEncoding
           // if (material.emissiveMap) material.emissiveMap.encoding = THREE.sRGBEncoding

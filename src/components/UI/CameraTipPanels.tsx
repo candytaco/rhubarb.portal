@@ -109,12 +109,6 @@ export const SpectatorCameraTipPanel = () => {
           <kbd>Shift</kbd>
         </div>
 
-        <div className="mb-1 flex">
-          <span>Zoom</span>
-          <div className="flex-1" />
-          <kbd>Scroll</kbd>
-        </div>
-
         <div className="flex">
           <span>Move speed</span>
           <div className="flex-1" />

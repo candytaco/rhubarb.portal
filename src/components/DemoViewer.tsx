@@ -174,6 +174,9 @@ const Controls = () => {
     }
 
     if (controlsMode === 'spectator' && spectatorRef.current) {
+      // Ground-grab panning measures its drag distance against the map floor
+      spectatorRef.current.groundZ = bounds.min.z
+
       if (focusedView) {
         cameraRef.current.quaternion.copy(focusedView.quaternion)
       } else {
@@ -369,7 +372,8 @@ const Controls = () => {
           name="spectator"
           attach="controls"
           args={[cameraRef.current, gl.domElement]}
-          {...settings.controls}
+          lookSpeed={settings.controls.lookSpeed}
+          moveSpeed={settings.controls.moveSpeed}
         />
       )}
     </>

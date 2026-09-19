@@ -39,6 +39,13 @@ export const EYE_HEIGHT_DUCKED = 28
 export const CUBE_SIZE = 36
 export const FLOOR_BUTTON_RADIUS = 40
 
+// Map tunnel to each bot: map surfaces within this radius of the line from the camera to the bot,
+// and nearer to the camera than the bot, are not drawn, so a bot in an enclosed chamber stays in
+// view. The end margin stops the tunnel short of the bot so the floor under it is kept.
+export const MAP_TUNNEL_RADIUS = 128
+export const MAP_TUNNEL_END_MARGIN = 32
+export const MAP_TUNNEL_MAX_TARGETS = 2
+
 // glTF bot models, served from public/models/players when present. The cloud environment cannot
 // export them (see specs/portal2-coop-replacement.md section 5); null renders the placeholder.
 export const BOT_MODEL_FILES: Record<PlayerRole, string | null> = {

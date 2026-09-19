@@ -206,6 +206,7 @@ export type StoreState = {
       playerOutlines: boolean
       showStats: boolean
       showSkybox: boolean
+      showMapTunnels: boolean
       showTtlMarkers: boolean
       showConsoleEvents: boolean
       viewDistance: number
@@ -304,6 +305,7 @@ export const initialState: StoreState = {
       playerOutlines: false,
       showStats: true,
       showSkybox: true,
+      showMapTunnels: true,
       showTtlMarkers: true,
       showConsoleEvents: false,
       viewDistance: 15000,
