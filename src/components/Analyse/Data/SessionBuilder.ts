@@ -146,6 +146,7 @@ export function buildSession(
   const floorButtons = toEntitySeries(timeSeries.getFloorButtonStates())
   const doors = toEntitySeries(timeSeries.getDoorStates())
   const lasers = toEntitySeries(timeSeries.getLaserStates())
+  const bridges = toEntitySeries(timeSeries.getBridgeStates())
 
   // events
   const events: SessionEvent[] = []
@@ -385,6 +386,7 @@ export function buildSession(
     floorButtons,
     doors,
     lasers,
+    bridges,
     events,
     chat,
     ttlRows: Int32Array.from(Array.from(ttlRows).sort((left, right) => left - right)),
@@ -612,7 +614,13 @@ function sessionBytes(session: Portal2Session): number {
   for (const player of session.players)
     total += player.state.byteLength + (player.view?.byteLength ?? 0)
   for (const portal of session.portals) if (portal) total += portal.state.byteLength
-  for (const group of [session.cubes, session.floorButtons, session.doors, session.lasers]) {
+  for (const group of [
+    session.cubes,
+    session.floorButtons,
+    session.doors,
+    session.lasers,
+    session.bridges,
+  ]) {
     for (const entry of group) total += entry.state.byteLength
   }
   return total

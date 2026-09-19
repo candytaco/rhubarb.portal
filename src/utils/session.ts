@@ -1,6 +1,7 @@
 // Read helpers over a Portal2Session for one axis row
 
 import {
+  BridgeDescriptor,
   CubeDescriptor,
   DoorDescriptor,
   FloorButtonDescriptor,
@@ -217,6 +218,7 @@ export const EntityColumns = {
   floorButton: FloorButtonDescriptor,
   door: DoorDescriptor,
   laser: LaserDescriptor,
+  bridge: BridgeDescriptor,
 }
 
 export function portalColor(role: PlayerRole, portalNumber: 1 | 2): string {

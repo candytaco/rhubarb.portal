@@ -754,6 +754,10 @@ export class Portal2DemoFileParser extends DemofileParser implements EntityTimeS
     return this.historiesOf([HazardServerClasses.Laser])
   }
 
+  bridgeHistories(): HistoryGroups {
+    return this.historiesOf([HazardServerClasses.LightBridge])
+  }
+
   /** Demo ticks of the rows of every time series, 0 to numTicks - 1 */
   tickAxis(): Int32Array {
     return arange(0, this.numTicks ?? 0)
@@ -815,6 +819,10 @@ export class Portal2DemoFileParser extends DemofileParser implements EntityTimeS
 
   getLaserStates(): Map<string, Matrix> {
     return this.timeSeries.getLaserStates()
+  }
+
+  getBridgeStates(): Map<string, Matrix> {
+    return this.timeSeries.getBridgeStates()
   }
 
   getPortalTraversals(): Matrix {

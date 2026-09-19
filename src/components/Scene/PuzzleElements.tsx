@@ -5,6 +5,7 @@ import { Line, useGLTF } from '@react-three/drei'
 
 import type { Portal2Session } from '@components/Analyse/Data/Session'
 import { EntityColumns, getEntityFrames, getPlayerFrames } from '@utils/session'
+import { angleVectorsFromSourceAnglesDeg } from '@utils/geometry'
 import { CUBE_SIZE, FLOOR_BUTTON_RADIUS } from '@constants/portal2'
 import { getAsset } from '@utils/misc'
 
@@ -23,6 +24,8 @@ const BUTTON_IDLE_COLOR = '#8a8a8a'
 const BUTTON_PRESSED_COLOR = '#4ade80'
 const DOOR_COLOR = '#b0b0b0'
 const LASER_COLOR = '#ff3b3b'
+const BRIDGE_COLOR = '#9fd3ff'
+const BRIDGE_WIDTH = 64
 
 /**
  * Weighted cube model, tinted while a player holds it. Cube series carry no angles, so the model
@@ -67,7 +70,53 @@ const PlaceholderCube = ({ held }: { held: boolean }) => (
 )
 
 /**
- * Weighted cubes, floor buttons, doors and lasers at the current axis row, as simple shapes
+ * Placement of one light bridge segment: a unit plane scaled to the segment length and width,
+ * lying along the start-to-end line with the segment rotation's up vector as its normal.
+ * @param values - The segment's BridgeDescriptor columns for the current row
+ * @returns Centre, quaternion and scale for the plane, or null when the segment has no extent
+ */
+function bridgePlacement(values: Float32Array) {
+  const columns = EntityColumns.bridge
+  const start = new THREE.Vector3(
+    values[columns.startX],
+    values[columns.startY],
+    values[columns.startZ]
+  )
+  const end = new THREE.Vector3(values[columns.endX], values[columns.endY], values[columns.endZ])
+  if ([start.x, start.y, start.z, end.x, end.y, end.z].some(Number.isNaN)) return null
+
+  const length = start.distanceTo(end)
+  if (length < 1) return null
+
+  const direction = end.clone().sub(start).divideScalar(length)
+  const { up } = angleVectorsFromSourceAnglesDeg({
+    pitch: values[columns.pitch] || 0,
+    yaw: values[columns.yaw] || 0,
+    roll: values[columns.roll] || 0,
+  })
+  // Width axis perpendicular to both the beam and its surface normal; a normal parallel to the
+  // beam has no width axis, so any perpendicular direction serves
+  const right = up.clone().cross(direction)
+  if (right.lengthSq() < 1e-6) {
+    right.set(0, 0, 1).cross(direction)
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0).cross(direction)
+  }
+  right.normalize()
+  const normal = direction.clone().cross(right)
+
+  const width = values[columns.width]
+  return {
+    center: start.clone().add(end).multiplyScalar(0.5),
+    quaternion: new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(direction, right, normal)
+    ),
+    scale: [length, Number.isNaN(width) ? BRIDGE_WIDTH : width, 1] as [number, number, number],
+  }
+}
+
+/**
+ * Weighted cubes, floor buttons, doors, lasers and light bridges at the current axis row, as
+ * simple shapes
  */
 export const PuzzleElements = ({ session, row, showLasers }: PuzzleElementsProps) => {
   const heldEntities = new Set(
@@ -80,6 +129,7 @@ export const PuzzleElements = ({ session, row, showLasers }: PuzzleElementsProps
   const buttons = getEntityFrames(session, session.floorButtons, row)
   const doors = getEntityFrames(session, session.doors, row)
   const lasers = showLasers ? getEntityFrames(session, session.lasers, row) : []
+  const bridges = getEntityFrames(session, session.bridges, row)
 
   return (
     <group name="puzzleElements">
@@ -160,6 +210,31 @@ export const PuzzleElements = ({ session, row, showLasers }: PuzzleElementsProps
             transparent
             opacity={0.9}
           />
+        )
+      })}
+
+      {bridges.map(frame => {
+        const placement = bridgePlacement(frame.values)
+        if (!placement) return null
+        return (
+          <mesh
+            key={`bridge-${frame.series.key}`}
+            name="lightBridge"
+            position={placement.center}
+            quaternion={placement.quaternion}
+            scale={placement.scale}
+            userData={{ entityIndex: frame.series.entityIndex }}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial
+              color={BRIDGE_COLOR}
+              transparent
+              opacity={0.35}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
         )
       })}
     </group>

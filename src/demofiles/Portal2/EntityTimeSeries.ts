@@ -29,6 +29,7 @@ import {
   HeldObjectDescriptors,
   HistoryFields,
   LaserDescriptors,
+  BridgeDescriptors,
   PlayerDescriptor,
   PlayerDescriptors,
   PortalDescriptor,
@@ -70,6 +71,7 @@ export interface EntityTimeSeriesSource {
   floorButtonHistories(): HistoryGroups
   doorHistories(): HistoryGroups
   laserHistories(): HistoryGroups
+  bridgeHistories(): HistoryGroups
   /** Ticks of the rows of every time series */
   tickAxis(): Int32Array
   /** Ticks at which entities were reported, on the tick axis clock, sorted */
@@ -383,6 +385,11 @@ export class EntityTimeSeries {
   /** Per-tick laser origin, start, end and on state by history key (viewer addition) */
   getLaserStates(): Map<string, Matrix> {
     return this.entitySeries(this.source.laserHistories(), LaserDescriptors)
+  }
+
+  /** Per-tick state of the light bridge segments, one [ticks x BridgeDescriptor] series per entity */
+  getBridgeStates(): Map<string, Matrix> {
+    return this.entitySeries(this.source.bridgeHistories(), BridgeDescriptors)
   }
 
   /** Portal traversals read from the entity-portalled messages, one row per traversal in tick order */

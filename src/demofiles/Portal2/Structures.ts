@@ -77,6 +77,7 @@ export const PuzzleElementServerClasses = {
 export const HazardServerClasses = {
   Laser: 'CPortalLaser',
   FloorTurret: 'CNPC_Portal_FloorTurret',
+  LightBridge: 'CProjectedWallEntity',
 } as const
 
 /** Server class names of the game rules proxies */
@@ -183,6 +184,11 @@ export const HazardProperties = {
   LaserStartPoint: 'm_vStartPoint',
   LaserEndPoint: 'm_vEndPoint',
   LaserOn: 'm_bLaserOn',
+  // One light bridge segment: a bridge that passes through a portal continues as a child entity
+  BridgeStartPoint: 'm_vecStartPoint',
+  BridgeEndPoint: 'm_vecEndPoint',
+  BridgeWidth: 'm_flWidth',
+  BridgeIsHorizontal: 'm_bIsHorizontal',
 } as const
 
 /** Network property names of the game rules proxies */
@@ -263,6 +269,14 @@ export const TrackedClassProperties: Record<string, string[]> = {
     HazardProperties.LaserOn,
   ],
   [HazardServerClasses.FloorTurret]: [EntityProperties.Origin, EntityProperties.Rotation],
+  [HazardServerClasses.LightBridge]: [
+    EntityProperties.Origin,
+    EntityProperties.Rotation,
+    HazardProperties.BridgeStartPoint,
+    HazardProperties.BridgeEndPoint,
+    HazardProperties.BridgeWidth,
+    HazardProperties.BridgeIsHorizontal,
+  ],
   [GameRulesServerClasses.CooperativeGameRules]: [
     GameRulesProperties.CooperativeSectionIndex,
     GameRulesProperties.NumPortalsPlaced,
@@ -575,4 +589,37 @@ export const LaserDescriptor = indexEnum(LaserDescriptors, [
   'endY',
   'endZ',
   'on',
+] as const)
+
+// Added for the viewer: one light bridge segment, whose surface spans the start-to-end line and the
+// right vector of its rotation, with the rotation's up vector as the surface normal
+export const BridgeDescriptors = [
+  ...OriginDescriptors,
+  describe('startX', HazardProperties.BridgeStartPoint, { component: 0 }),
+  describe('startY', HazardProperties.BridgeStartPoint, { component: 1 }),
+  describe('startZ', HazardProperties.BridgeStartPoint, { component: 2 }),
+  describe('endX', HazardProperties.BridgeEndPoint, { component: 0 }),
+  describe('endY', HazardProperties.BridgeEndPoint, { component: 1 }),
+  describe('endZ', HazardProperties.BridgeEndPoint, { component: 2 }),
+  describe('pitch', EntityProperties.Rotation, { component: 0 }),
+  describe('yaw', EntityProperties.Rotation, { component: 1 }),
+  describe('roll', EntityProperties.Rotation, { component: 2 }),
+  describe('width', HazardProperties.BridgeWidth, { continuous: false }),
+  describe('horizontal', HazardProperties.BridgeIsHorizontal, { continuous: false }),
+]
+export const BridgeDescriptor = indexEnum(BridgeDescriptors, [
+  'x',
+  'y',
+  'z',
+  'startX',
+  'startY',
+  'startZ',
+  'endX',
+  'endY',
+  'endZ',
+  'pitch',
+  'yaw',
+  'roll',
+  'width',
+  'horizontal',
 ] as const)

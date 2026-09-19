@@ -111,6 +111,7 @@ export interface Portal2Session {
   floorButtons: SessionEntitySeries[]
   doors: SessionEntitySeries[]
   lasers: SessionEntitySeries[]
+  bridges: SessionEntitySeries[]
   events: SessionEvent[]
   chat: SessionChatMessage[]
   ttlRows: Int32Array
@@ -151,6 +152,7 @@ export function sessionTransferables(session: Portal2Session): ArrayBufferLike[]
     ...session.floorButtons,
     ...session.doors,
     ...session.lasers,
+    ...session.bridges,
   ]) {
     buffers.push(series.state.buffer)
   }

@@ -223,6 +223,13 @@ export class Portal2CoopDemoFilesParser implements EntityTimeSeriesSource {
     )
   }
 
+  bridgeHistories(): HistoryGroups {
+    return EntityTimeSeries.mergeHistoryGroups(
+      this.player1Parser.bridgeHistories(),
+      this.player2Parser.bridgeHistories()
+    )
+  }
+
   /** Server ticks of the rows of every time series, those covered by both demos */
   tickAxis(): Int32Array {
     return this.getSynchronizedServerTicks()
@@ -296,6 +303,10 @@ export class Portal2CoopDemoFilesParser implements EntityTimeSeriesSource {
 
   getLaserStates(): Map<string, Matrix> {
     return this.timeSeries.getLaserStates()
+  }
+
+  getBridgeStates(): Map<string, Matrix> {
+    return this.timeSeries.getBridgeStates()
   }
 
   getPortalTraversals(): Matrix {
