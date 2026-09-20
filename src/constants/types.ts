@@ -78,13 +78,16 @@ export const UIPanelType = {
 
 export type UIPanelType = (typeof UIPanelType)[keyof typeof UIPanelType]
 
+/** Which of the demo's outer scanner pulses a recording is lined up against */
+export type RecordingPulse = 'first' | 'last'
+
 /** One player's uploaded screen recording, played against the demo clock */
 export type SessionRecording = {
   name: string
   /** object URL of the uploaded file */
   url: string
-  /** seconds added to the demo clock time to reach the matching point in the video */
-  offsetSeconds: number
+  /** the pulse the recording is lined up against and its time in the recording, null until marked */
+  alignment: { pulse: RecordingPulse; seconds: number } | null
 }
 
 // Version 1 setups carried TF2 class stickers and are dropped on load

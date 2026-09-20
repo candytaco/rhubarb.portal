@@ -29,6 +29,7 @@ import {
   DrawingTool,
   SavedSetup,
   SETUP_STORAGE_VERSION,
+  RecordingPulse,
   SceneMode,
   StickerDefinition,
   StickerAnnotation,
@@ -87,8 +88,48 @@ const setSessionRecording = (slot: number, file: File) => {
   instance.setRecording(slot, {
     name: file.name,
     url: URL.createObjectURL(file),
-    offsetSeconds: 0,
+    alignment: null,
   })
+}
+
+/**
+ * Opens or closes the recording alignment controls. Playback is paused while they are open, since
+ * the recordings are detached from the demo clock and moved on their own.
+ * @param aligning  whether the controls should be open, or omitted to flip them
+ */
+export const toggleRecordingAlignmentAction = async (aligning?: boolean) => {
+  try {
+    const instance = useInstance.getState()
+    const isAligning = aligning !== undefined ? aligning : !instance.aligningRecordings
+
+    if (isAligning) await togglePlaybackAction(false)
+    instance.setAligningRecordings(isAligning)
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+/**
+ * Lines a screen recording up with the demo by marking which point in it matches one of the demo's
+ * outer scanner pulses. There is one such point, so marking either pulse replaces the other.
+ * @param slot     player slot the recording belongs to
+ * @param pulse    which pulse the time is being taken against
+ * @param seconds  time in the recording
+ */
+export const setRecordingAlignmentAction = async (
+  slot: number,
+  pulse: RecordingPulse,
+  seconds: number
+) => {
+  try {
+    const instance = useInstance.getState()
+    const recording = instance.recordings[slot]
+    if (!recording) return
+
+    instance.setRecording(slot, { ...recording, alignment: { pulse, seconds } })
+  } catch (error) {
+    console.error(error)
+  }
 }
 
 export const onUploadDemoAction = async (files: File[]) => {
@@ -191,6 +232,7 @@ export const loadSceneFromSessionAction = async (session: Portal2Session) => {
     useInstance.getState().setFocusedObject(undefined)
     useInstance.getState().setLastFocusedPOV(undefined)
     useInstance.getState().setMapCenterPickerActive(false)
+    useInstance.getState().setAligningRecordings(false)
 
     dispatch({
       type: 'LOAD_SCENE',
@@ -436,6 +478,9 @@ export const togglePlaybackAction = async (playing?: boolean) => {
   try {
     // Use {playing} value if provided - otherwise use the inverse of current value
     const isPlaying = playing !== undefined ? playing : !getState().playback.playing
+
+    // The recordings move on their own while they are being lined up, so the demo stays put
+    if (isPlaying && useInstance.getState().aligningRecordings) return
     const isAtEnd = getState().playback.maxTicks === getState().playback.tick
 
     // Pressing play when at the end of playback should trigger restart

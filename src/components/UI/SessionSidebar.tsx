@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useInstance, useStore } from '@zus/store'
+import { toggleRecordingAlignmentAction } from '@zus/actions'
 import { RoleIcon } from '@components/UI/RoleIcon'
 import { PlayerStatuses } from '@components/UI/PlayerStatuses'
-import { RecordingPlayer } from '@components/UI/RecordingPlayer'
+import { RecordingControls } from '@components/UI/RecordingControls'
+import { useRecordingSync } from '@components/UI/RecordingPlayer'
 import { PLAYER_ROLE_COLORS, PLAYER_ROLE_NAMES } from '@constants/portal2'
 import { getDurationFromTicks } from '@utils/parser'
 import { getPlayerFrames } from '@utils/session'
@@ -14,7 +16,19 @@ import { cn } from '@utils/styling'
  * panel has been given one, and until then a placeholder naming the player
  * (specs/portal2-coop-replacement.md section 7).
  */
-export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
+export interface RecordingPlaceholderProps {
+  slot: number
+  /** whether the alignment controls are showing */
+  aligning: boolean
+  /** demo time of the first scanner pulse, null when the demo has none */
+  firstTTLSeconds: number | null
+  /** demo time of the last scanner pulse, null when the demo has none */
+  lastTTLSeconds: number | null
+}
+
+export const RecordingPlaceholder = (props: RecordingPlaceholderProps) => {
+  const { slot, aligning, firstTTLSeconds, lastTTLSeconds } = props
+
   const session = useInstance(state => state.session)
   const recordings = useInstance(state => state.recordings)
   const recording = recordings[slot]
@@ -25,37 +39,94 @@ export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
   const label = player ? PLAYER_ROLE_NAMES[role] : `Player ${slot + 1}`
   const color = PLAYER_ROLE_COLORS[role]
 
+  const [video, setVideo] = useState<HTMLVideoElement | null>(null)
+  // only a render trigger: the recording's length is read straight off the element
+  const [, setMetadataCount] = useState(0)
+  const [failed, setFailed] = useState(false)
+
+  const { gap, seekOntoDemoClock } = useRecordingSync({
+    video,
+    recording,
+    aligning,
+    isClock,
+    firstTTLSeconds,
+    lastTTLSeconds,
+  })
+
+  useEffect(() => {
+    setFailed(false)
+  }, [recording?.url])
+
+  const onMetadata = () => setMetadataCount(count => count + 1)
+
   return (
-    <div
-      className={cn(
-        'relative flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-pp-panel/60 p-4 text-center',
-        !recording && 'border-dashed'
-      )}
-      data-recording-slot={slot}
-    >
-      <div className="absolute inset-x-0 top-0 z-10 h-1" style={{ backgroundColor: color }} />
+    <div className="flex flex-col gap-2">
+      <div
+        className={cn(
+          'relative flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-pp-panel/60 p-4 text-center',
+          !recording && 'border-dashed'
+        )}
+        data-recording-slot={slot}
+      >
+        <div className="absolute inset-x-0 top-0 z-10 h-1" style={{ backgroundColor: color }} />
 
-      {recording ? (
-        <div className="absolute inset-0">
-          <RecordingPlayer recording={recording} isClock={isClock} />
-        </div>
-      ) : (
-        <>
-          <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">
-            Screen recording
+        {recording && !failed && (
+          <video
+            ref={setVideo}
+            src={recording.url}
+            className="absolute inset-0 h-full w-full object-contain"
+            muted
+            playsInline
+            preload="auto"
+            onLoadedMetadata={() => {
+              onMetadata()
+              seekOntoDemoClock()
+            }}
+            onDurationChange={onMetadata}
+            onError={() => setFailed(true)}
+          />
+        )}
+
+        {recording && !failed && gap !== null && (
+          <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black/70 text-xs">
+            No video at this point
           </div>
+        )}
 
-          <div className="mt-2 flex items-center gap-2 text-lg font-bold">
-            <RoleIcon role={role} size={20} />
-            <span>{label}</span>
+        {recording && failed && (
+          <div className="text-xs opacity-60">
+            {recording.name} cannot be played in this browser
           </div>
+        )}
 
-          {!player && <div className="mt-1 text-xs opacity-50">No demo loaded</div>}
+        {!recording && (
+          <>
+            <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">
+              Screen recording
+            </div>
 
-          <div className="mt-4 max-w-[18rem] text-xs opacity-40">
-            Video playback synced to the demo clock will appear here
-          </div>
-        </>
+            <div className="mt-2 flex items-center gap-2 text-lg font-bold">
+              <RoleIcon role={role} size={20} />
+              <span>{label}</span>
+            </div>
+
+            {!player && <div className="mt-1 text-xs opacity-50">No demo loaded</div>}
+
+            <div className="mt-4 max-w-[18rem] text-xs opacity-40">
+              Video playback synced to the demo clock will appear here
+            </div>
+          </>
+        )}
+      </div>
+
+      {recording && aligning && video && (
+        <RecordingControls
+          slot={slot}
+          recording={recording}
+          video={video}
+          firstTTLSeconds={firstTTLSeconds}
+          lastTTLSeconds={lastTTLSeconds}
+        />
       )}
     </div>
   )
@@ -197,7 +268,14 @@ export interface SessionSidebarProps {
  */
 export const SessionSidebar = ({ onResize }: SessionSidebarProps) => {
   const session = useInstance(state => state.session)
+  const recordings = useInstance(state => state.recordings)
   const tick = useStore(state => state.playback.tick)
+  const aligning = useInstance(state => state.aligningRecordings)
+
+  const pulseRows = session && session.ttlRows.length > 0 ? session.ttlRows : null
+  const firstTTLSeconds = pulseRows && session ? pulseRows[0] * session.intervalPerTick : null
+  const lastTTLSeconds =
+    pulseRows && session ? pulseRows[pulseRows.length - 1] * session.intervalPerTick : null
 
   return (
     <aside
@@ -212,9 +290,37 @@ export const SessionSidebar = ({ onResize }: SessionSidebarProps) => {
         {session && (
           <PlayerStatuses session={session} players={getPlayerFrames(session, tick)} tick={tick} />
         )}
-        <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Recordings</div>
-        <RecordingPlaceholder slot={0} />
-        <RecordingPlaceholder slot={1} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Recordings</div>
+
+          {recordings.some(entry => entry !== null) && (
+            <button
+              type="button"
+              className={cn(
+                'rounded-md border px-2 py-0.5 text-xs transition-colors',
+                aligning
+                  ? 'border-white bg-white text-black'
+                  : 'border-white/20 hover:border-white/60'
+              )}
+              onClick={() => toggleRecordingAlignmentAction()}
+            >
+              Align videos
+            </button>
+          )}
+        </div>
+
+        <RecordingPlaceholder
+          slot={0}
+          aligning={aligning}
+          firstTTLSeconds={firstTTLSeconds}
+          lastTTLSeconds={lastTTLSeconds}
+        />
+        <RecordingPlaceholder
+          slot={1}
+          aligning={aligning}
+          firstTTLSeconds={firstTTLSeconds}
+          lastTTLSeconds={lastTTLSeconds}
+        />
         <SessionDetails />
       </div>
     </aside>

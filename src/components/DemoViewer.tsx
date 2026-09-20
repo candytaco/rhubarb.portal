@@ -55,6 +55,7 @@ import { cn } from '@utils/styling'
 import { getPlayerFrames, getPortalFrames, PlayerFrame, PortalFrame } from '@utils/session'
 import { ControlsMode, DrawingTool, SavedSetupCamera } from '@constants/types'
 import { getWorldIntersectionFromScreen } from '@utils/raycast'
+import { recordingTimeToDemoSeconds } from '@utils/recordings'
 
 //
 // ─── THREE SETTINGS & ELEMENTS ──────────────────────────────────────────────────
@@ -661,7 +662,7 @@ class DemoViewer extends Component<DemoViewerProps> {
     const { video, offsetSeconds } = clock
     if (video.paused || video.ended || video.readyState < VIDEO_HAVE_CURRENT_DATA) return 1
 
-    const recordingLead = video.currentTime - offsetSeconds - demoSeconds
+    const recordingLead = recordingTimeToDemoSeconds(video.currentTime, offsetSeconds) - demoSeconds
     if (Math.abs(recordingLead) > DEMO_CLOCK_SNAP_SECONDS) return 1
 
     const trim = recordingLead / DEMO_CLOCK_CONVERGE_SECONDS

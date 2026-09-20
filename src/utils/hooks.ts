@@ -62,3 +62,81 @@ export function usePointerLock() {
     isPointerLocked,
   }
 }
+
+/** Frame gaps outside this range are a dropped frame or a stall rather than the true frame time */
+const MIN_FRAME_SECONDS = 1 / 240
+const MAX_FRAME_SECONDS = 1 / 10
+/** Frame gaps collected before the frame rate is taken as measured */
+const FRAME_RATE_SAMPLES = 5
+
+/**
+ * Measures a video's frame rate from the frames it presents, since no element property reports it.
+ * A paused video presents nothing, so with {measure} set it is briefly played to produce frames and
+ * then returned to where it was.
+ * @param video    the video element to measure, or null before it mounts
+ * @param measure  whether a paused video may be played briefly to take the measurement
+ * @returns Frames per second, or null while it is still unknown
+ */
+export function useVideoFrameRate(
+  video: HTMLVideoElement | null,
+  measure: boolean = false
+): number | null {
+  const [frameRate, setFrameRate] = useState<number | null>(null)
+
+  useEffect(() => {
+    setFrameRate(null)
+  }, [video])
+
+  useEffect(() => {
+    if (!video || frameRate !== null) return
+    if (typeof video.requestVideoFrameCallback !== 'function') return
+
+    let cancelled = false
+    let handle = 0
+    let previous: { mediaTime: number; presentedFrames: number } | null = null
+    const gaps: number[] = []
+
+    // A paused video is nudged into playing so that it presents the frames the measurement needs
+    const nudged = measure && video.paused
+    const resumeSeconds = video.currentTime
+    const restore = () => {
+      if (!nudged) return
+      video.pause()
+      video.currentTime = resumeSeconds
+    }
+
+    const onFrame: VideoFrameRequestCallback = (_now, metadata) => {
+      if (cancelled) return
+
+      if (previous) {
+        const frames = metadata.presentedFrames - previous.presentedFrames
+        const elapsed = metadata.mediaTime - previous.mediaTime
+        if (frames === 1 && elapsed > MIN_FRAME_SECONDS && elapsed < MAX_FRAME_SECONDS) {
+          gaps.push(elapsed)
+        }
+      }
+      previous = { mediaTime: metadata.mediaTime, presentedFrames: metadata.presentedFrames }
+
+      if (gaps.length >= FRAME_RATE_SAMPLES) {
+        const sorted = [...gaps].sort((left, right) => left - right)
+        const median = sorted[Math.floor(sorted.length / 2)]
+        restore()
+        setFrameRate(Math.round((1 / median) * 1000) / 1000)
+        return
+      }
+
+      handle = video.requestVideoFrameCallback(onFrame)
+    }
+
+    handle = video.requestVideoFrameCallback(onFrame)
+    if (nudged) video.play().catch(() => {})
+
+    return () => {
+      cancelled = true
+      if (handle) video.cancelVideoFrameCallback(handle)
+      restore()
+    }
+  }, [video, frameRate, measure])
+
+  return frameRate
+}
