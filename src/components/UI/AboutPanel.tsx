@@ -1,5 +1,4 @@
-import React, { useEffect } from 'react'
-import { useDropzone } from 'react-dropzone'
+import React from 'react'
 import axios from 'axios'
 
 import { TogglePanel, TogglePanelButton } from '@components/UI/Shared/TogglePanel'
@@ -9,7 +8,6 @@ import { useStore } from '@zus/store'
 import {
   toggleUIPanelAction,
   parseDemoAction,
-  onUploadDemoAction,
   goToTickAction,
   loadEmptySceneMapAction,
   addDownloadAction,
@@ -30,27 +28,18 @@ export const AboutPanel = () => {
   const isOpen = useStore(state => state.ui.activePanels.includes('About'))
   const loadedMap = useStore(state => state.scene.map)
 
-  const {
-    open: openFileBrowser,
-    getInputProps,
-    acceptedFiles,
-  } = useDropzone({
-    noClick: true,
-    noKeyboard: true,
-    maxFiles: 2,
-    multiple: true,
-  })
-
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
+    toggleUIPanelAction('Load', false)
     toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Bookmarks', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('About')
   }
 
-  const onClickDropSelectFile = async () => {
-    openFileBrowser()
+  const onClickLoadSession = () => {
+    toggleUIPanelAction('About', false)
+    toggleUIPanelAction('Load', true)
   }
 
   const onClickSampleDemo = async () => {
@@ -83,10 +72,6 @@ export const AboutPanel = () => {
   const onClickMapName = async (mapName: string) => {
     loadEmptySceneMapAction(mapName)
   }
-
-  useEffect(() => {
-    if (acceptedFiles.length > 0) onUploadDemoAction(acceptedFiles)
-  }, [acceptedFiles, onUploadDemoAction])
 
   return (
     <div className="flex items-start">
@@ -137,19 +122,18 @@ export const AboutPanel = () => {
           <div className="mt-5">
             <p>Replay Portal 2 co-op demos in your browser.</p>
             <p className="mt-2 text-sm opacity-70">
-             Upload one or both player's demofiles from a co-op session
+              Upload one or both player's demofiles from a co-op session
             </p>
           </div>
 
           {/* Main CTAs */}
 
           <div className="mt-8 flex items-center justify-center text-sm">
-            <input {...getInputProps()} />
             <button
               className="rounded-full border border-dashed px-3.5 py-1 transition-all hover:border-solid hover:bg-black hover:invert"
-              onClick={onClickDropSelectFile}
+              onClick={onClickLoadSession}
             >
-              Drop/select <code>.dem</code> file(s)
+              Load a session
             </button>
 
             <div className="mx-2">/</div>
@@ -210,8 +194,8 @@ export const AboutPanel = () => {
           <p className="mb-2 mt-10 text-xs font-black uppercase opacity-60">Co-op maps</p>
 
           <p className="mb-3 text-xs opacity-60">
-            A list of al maps in co-op mode. Some may not have have the bsps exported.
-            Maps without assets show the recorded positions over a grid.
+            A list of al maps in co-op mode. Some may not have have the bsps exported. Maps without
+            assets show the recorded positions over a grid.
           </p>
 
           <div className="grid grid-cols-2 gap-y-1 text-sm">

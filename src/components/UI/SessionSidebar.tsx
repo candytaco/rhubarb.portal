@@ -1,17 +1,20 @@
 import { useInstance, useStore } from '@zus/store'
 import { RoleIcon } from '@components/UI/RoleIcon'
 import { PlayerStatuses } from '@components/UI/PlayerStatuses'
+import { RecordingPlayer } from '@components/UI/RecordingPlayer'
 import { PLAYER_ROLE_COLORS, PLAYER_ROLE_NAMES } from '@constants/portal2'
 import { getDurationFromTicks } from '@utils/parser'
 import { getPlayerFrames } from '@utils/session'
 import { cn } from '@utils/styling'
 
 /**
- * Placeholder for one player's screen recording. A later phase mounts a <video> here and drives
- * it from playback.tick with a per-recording offset (specs/portal2-coop-replacement.md section 7).
+ * One player's screen recording slot: the uploaded video driven by the demo clock once the load
+ * panel has been given one, and until then a placeholder naming the player
+ * (specs/portal2-coop-replacement.md section 7).
  */
 export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
   const session = useInstance(state => state.session)
+  const recording = useInstance(state => state.recordings[slot])
   const player = session?.players[slot]
   const role = player?.role ?? 'unknown'
   const label = player ? PLAYER_ROLE_NAMES[role] : `Player ${slot + 1}`
@@ -19,23 +22,36 @@ export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
 
   return (
     <div
-      className="relative flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/20 bg-pp-panel/60 p-4 text-center"
+      className={cn(
+        'relative flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-pp-panel/60 p-4 text-center',
+        !recording && 'border-dashed'
+      )}
       data-recording-slot={slot}
     >
-      <div className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: color }} />
+      <div className="absolute inset-x-0 top-0 z-10 h-1" style={{ backgroundColor: color }} />
 
-      <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Screen recording</div>
+      {recording ? (
+        <div className="absolute inset-0">
+          <RecordingPlayer recording={recording} />
+        </div>
+      ) : (
+        <>
+          <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">
+            Screen recording
+          </div>
 
-      <div className="mt-2 flex items-center gap-2 text-lg font-bold">
-        <RoleIcon role={role} size={20} />
-        <span>{label}</span>
-      </div>
+          <div className="mt-2 flex items-center gap-2 text-lg font-bold">
+            <RoleIcon role={role} size={20} />
+            <span>{label}</span>
+          </div>
 
-      {!player && <div className="mt-1 text-xs opacity-50">No demo loaded</div>}
+          {!player && <div className="mt-1 text-xs opacity-50">No demo loaded</div>}
 
-      <div className="mt-4 max-w-[18rem] text-xs opacity-40">
-        Video playback synced to the demo clock will appear here
-      </div>
+          <div className="mt-4 max-w-[18rem] text-xs opacity-40">
+            Video playback synced to the demo clock will appear here
+          </div>
+        </>
+      )}
     </div>
   )
 }

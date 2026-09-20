@@ -374,3 +374,24 @@ export const FaTrashIcon = (props: SVGProps<SVGSVGElement>) => {
     </svg>
   )
 }
+
+export const HiArrowUpTrayIcon = (props: SVGProps<SVGSVGElement>) => {
+  return (
+    <svg
+      stroke="currentColor"
+      fill="none"
+      strokeWidth="1.5"
+      viewBox="0 0 24 24"
+      height="1rem"
+      width="1rem"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5"
+      />
+    </svg>
+  )
+}

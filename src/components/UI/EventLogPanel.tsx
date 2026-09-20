@@ -80,6 +80,7 @@ export const EventLogPanel = () => {
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
     toggleUIPanelAction('About', false)
+    toggleUIPanelAction('Load', false)
     toggleUIPanelAction('Bookmarks', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('EventLog')

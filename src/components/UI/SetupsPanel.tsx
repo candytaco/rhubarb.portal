@@ -65,6 +65,7 @@ export const SetupsPanel = () => {
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
     toggleUIPanelAction('About', false)
+    toggleUIPanelAction('Load', false)
     toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Bookmarks', false)
     toggleUIPanelAction('Setups')

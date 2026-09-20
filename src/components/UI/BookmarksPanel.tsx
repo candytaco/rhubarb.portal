@@ -20,6 +20,7 @@ export const BookmarksPanel = () => {
   const toggleUIPanel = () => {
     toggleUIPanelAction('Settings', false)
     toggleUIPanelAction('About', false)
+    toggleUIPanelAction('Load', false)
     toggleUIPanelAction('EventLog', false)
     toggleUIPanelAction('Setups', false)
     toggleUIPanelAction('Bookmarks')
