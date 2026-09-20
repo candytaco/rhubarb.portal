@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 
 import { IoArrowForwardSharpIcon } from '@components/Misc/Icons'
@@ -14,8 +14,23 @@ import { useStore, useInstance } from '@zus/store'
 import { applySetupAction } from '@zus/actions'
 import { useIsMobile } from '@utils/hooks'
 
+const MIN_SIDEBAR_WIDTH = 280
+const MAX_SIDEBAR_WIDTH_FRACTION = 0.6
+const DEFAULT_SIDEBAR_WIDTH_FRACTION = 1 / 3
+
 /**
- * Page layout: the 3D viewer takes the left two thirds of a widescreen page and the right third
+ * Keeps a sidebar width inside the window so that neither the viewer nor the sidebar can be
+ * squeezed away, whatever the drag or the window size.
+ * @param width - The requested width in pixels
+ * @returns The width clamped to the allowed range
+ */
+function clampSidebarWidth(width: number): number {
+  const maximum = Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth * MAX_SIDEBAR_WIDTH_FRACTION)
+  return Math.min(Math.max(width, MIN_SIDEBAR_WIDTH), maximum)
+}
+
+/**
+ * Page layout: the 3D viewer takes the left of a widescreen page and the resizable right column
  * holds the two players' screen recording placeholders. Below 1024px the column stacks under
  * the viewer. Every overlay is positioned relative to the viewer cell, not the window.
  */
@@ -26,6 +41,9 @@ const ViewerPage = () => {
   const setupCameraBridge = useInstance(state => state.setupCameraBridge)
   const pendingSharedSetup = useStore(state => state.setups.pendingSharedSetup)
   const isMobile = useIsMobile()
+  const [sidebarWidth, setSidebarWidth] = useState(
+    () => window.innerWidth * DEFAULT_SIDEBAR_WIDTH_FRACTION
+  )
 
   const loadingDownloads = useStore(state =>
     Array.from(state.downloads.values()).filter(({ status }) => status === 'loading')
@@ -45,11 +63,14 @@ const ViewerPage = () => {
   //
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden antialiased lg:grid lg:grid-cols-[2fr_1fr] lg:grid-rows-1">
+    <div
+      className="flex h-screen w-screen flex-col overflow-hidden antialiased lg:grid lg:grid-rows-1"
+      style={{ gridTemplateColumns: `minmax(0, 1fr) ${clampSidebarWidth(sidebarWidth)}px` }}
+    >
       <GlobalKeyHandler />
 
       {/* Viewer cell: the canvas plus every overlay */}
-      <div className="relative h-[60vh] min-h-0 flex-none lg:h-screen">
+      <div className="relative h-[60vh] min-h-0 min-w-0 flex-none lg:h-screen">
         <DemoViewer session={session} map={loadedMap} />
 
         {/* Downloads overlay */}
@@ -130,7 +151,7 @@ const ViewerPage = () => {
       </div>
 
       {/* Right column: screen recording placeholders and session details */}
-      <SessionSidebar />
+      <SessionSidebar onResize={setSidebarWidth} />
     </div>
   )
 }

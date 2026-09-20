@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { useInstance, useStore } from '@zus/store'
 import { RoleIcon } from '@components/UI/RoleIcon'
 import { PlayerStatuses } from '@components/UI/PlayerStatuses'
@@ -142,26 +144,79 @@ const SessionDetails = () => {
 }
 
 /**
- * The right hand column: two screen recording placeholders and the session details
+ * Vertical drag handle on the sidebar's inner edge, reporting the sidebar width the pointer
+ * implies. Hidden below the breakpoint where the sidebar becomes a row under the viewer.
+ * @param props - Callback given the new sidebar width in pixels
  */
-export const SessionSidebar = () => {
+const SidebarResizeHandle = ({ onResize }: { onResize: (width: number) => void }) => {
+  const [dragging, setDragging] = useState(false)
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDragging(true)
+  }
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return
+    onResize(window.innerWidth - event.clientX)
+  }
+
+  const endDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return
+    event.currentTarget.releasePointerCapture(event.pointerId)
+    setDragging(false)
+  }
+
+  return (
+    <div
+      className={cn(
+        'absolute inset-y-0 left-0 z-20 hidden w-2 cursor-col-resize select-none lg:block',
+        'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-white/15 after:transition-colors',
+        dragging ? 'after:bg-white/60' : 'hover:after:bg-white/40'
+      )}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDragging}
+      onPointerCancel={endDragging}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+    />
+  )
+}
+
+export interface SessionSidebarProps {
+  onResize: (width: number) => void
+}
+
+/**
+ * The right hand column: two screen recording placeholders and the session details, with a handle
+ * on its inner edge that resizes it
+ * @param props - Callback given the new sidebar width in pixels
+ */
+export const SessionSidebar = ({ onResize }: SessionSidebarProps) => {
   const session = useInstance(state => state.session)
   const tick = useStore(state => state.playback.tick)
 
   return (
     <aside
       className={cn(
-        'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto border-t border-white/10 bg-black/40 p-3',
+        'relative flex min-h-0 flex-1 flex-col border-t border-white/10 bg-black/40',
         'lg:h-screen lg:flex-none lg:border-l lg:border-t-0'
       )}
     >
-      {session && (
-        <PlayerStatuses session={session} players={getPlayerFrames(session, tick)} tick={tick} />
-      )}
-      <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Recordings</div>
-      <RecordingPlaceholder slot={0} />
-      <RecordingPlaceholder slot={1} />
-      <SessionDetails />
+      <SidebarResizeHandle onResize={onResize} />
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+        {session && (
+          <PlayerStatuses session={session} players={getPlayerFrames(session, tick)} tick={tick} />
+        )}
+        <div className="text-[0.65rem] uppercase tracking-[0.2em] opacity-50">Recordings</div>
+        <RecordingPlaceholder slot={0} />
+        <RecordingPlaceholder slot={1} />
+        <SessionDetails />
+      </div>
     </aside>
   )
 }
