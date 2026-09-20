@@ -155,6 +155,7 @@ export const World = (props: WorldProps) => {
   useEffect(() => {
     setMapModel(null)
     setMapOverlay(null)
+    useInstance.getState().setReadyMapModel(null)
     chunkRootsByNameRef.current = new Map()
     visibilityCullingEnabledRef.current = false
     currentClusterRef.current = null
@@ -209,6 +210,8 @@ export const World = (props: WorldProps) => {
     // Maps without converted assets (see specs/portal2-coop-replacement.md section 5) render the
     // fallback grid instead of downloading a model that does not exist
     if (mapAssetsAvailable === false) {
+      // nothing to download, so the scene is as ready as it will get
+      useInstance.getState().setReadyMapModel(map)
       return
     }
 
@@ -224,6 +227,7 @@ export const World = (props: WorldProps) => {
         if (requestId === mapLoadRequestIdRef.current && gltf && gltf.scene) {
           setMapModel(gltf.scene)
           setMapAssetsAvailableAction(true)
+          useInstance.getState().setReadyMapModel(map)
         }
       })
       .catch(error => {

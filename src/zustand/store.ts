@@ -42,6 +42,8 @@ export type InstanceState = {
   session?: Portal2Session
   /** one uploaded screen recording per player slot, null where the slot has none */
   recordings: (SessionRecording | null)[]
+  /** the map whose model has finished downloading, null while one is still loading */
+  readyMapModel: string | null
   /** the screen recording the demo clock follows, with what its own time means on that clock */
   recordingClock: { video: HTMLVideoElement; offsetSeconds: number } | null
   focusedObject?: THREE.Object3D
@@ -63,6 +65,7 @@ export type InstanceState = {
   setThreeScene: (threeScene: THREE.Scene) => void
   setSession: (session: Portal2Session | undefined) => void
   setRecording: (slot: number, recording: SessionRecording | null) => void
+  setReadyMapModel: (readyMapModel: string | null) => void
   setRecordingClock: (
     recordingClock: { video: HTMLVideoElement; offsetSeconds: number } | null
   ) => void
@@ -100,6 +103,7 @@ const useInstance = create<InstanceState>()(set => ({
   threeScene: new THREE.Scene(),
   session: undefined,
   recordings: [null, null],
+  readyMapModel: null,
   recordingClock: null,
   focusedObject: undefined,
   lastFocusedPOV: undefined,
@@ -116,6 +120,7 @@ const useInstance = create<InstanceState>()(set => ({
   setThreeScene: (threeScene: THREE.Scene) => set({ threeScene }),
   setSession: (session: Portal2Session | undefined) => set({ session }),
   setRecordingClock: recordingClock => set({ recordingClock }),
+  setReadyMapModel: (readyMapModel: string | null) => set({ readyMapModel }),
   setRecording: (slot: number, recording: SessionRecording | null) =>
     set(state => ({
       recordings: state.recordings.map((existing, index) =>

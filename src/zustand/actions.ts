@@ -204,7 +204,8 @@ export const loadSceneFromSessionAction = async (session: Portal2Session) => {
           },
         },
         playback: {
-          playing: true,
+          // PlaybackAssetGate starts playback once the scene's assets have downloaded
+          playing: false,
           speed: 1,
           tick: 1,
           maxTicks: session.tickAxis.length - 1,

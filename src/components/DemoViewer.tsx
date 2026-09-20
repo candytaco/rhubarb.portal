@@ -3,7 +3,7 @@ import { Component, createRef, useRef, useEffect, useState, useCallback, Suspens
 // THREE related imports
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree, extend } from '@react-three/fiber'
-import { PerspectiveCamera } from '@react-three/drei'
+import { PerspectiveCamera, useProgress } from '@react-three/drei'
 import { EffectComposer, Outline, Selection } from '@react-three/postprocessing'
 import { BlendFunction } from 'postprocessing'
 
@@ -322,6 +322,27 @@ const Controls = () => {
       )}
     </>
   )
+}
+
+/**
+ * Holds playback until the scene's assets have downloaded, then starts it once per loaded session
+ * so that the replay does not run while the map and models are still streaming in.
+ * @param props - The loaded session and the map it plays on
+ */
+const PlaybackAssetGate = ({ session, map }: { session?: Portal2Session; map: string }) => {
+  const readyMapModel = useInstance(state => state.readyMapModel)
+  const loaderActive = useProgress(state => state.active)
+  const startedForRef = useRef<Portal2Session | undefined>(undefined)
+
+  useEffect(() => {
+    if (!session || startedForRef.current === session) return
+    if (readyMapModel !== map || loaderActive) return
+
+    startedForRef.current = session
+    togglePlaybackAction(true)
+  }, [session, map, readyMapModel, loaderActive])
+
+  return null
 }
 
 const PerfProbe = ({ enabled }: { enabled: boolean }) => {
@@ -865,6 +886,8 @@ class DemoViewer extends Component<DemoViewerProps> {
         </div>
 
         <div className="ui-layers" ref={this.uiLayers}>
+          <PlaybackAssetGate session={session} map={map} />
+
           <DoubleTapSeek />
 
           <MapAssetsNotice map={map} />
