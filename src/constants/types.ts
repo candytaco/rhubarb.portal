@@ -68,6 +68,7 @@ export type StickerAnnotation = StickerDefinition & {
 }
 
 export const UIPanelType = {
+  LOAD: 'Load',
   ABOUT: 'About',
   SETTINGS: 'Settings',
   EVENT_LOG: 'EventLog',
@@ -76,6 +77,15 @@ export const UIPanelType = {
 } as const
 
 export type UIPanelType = (typeof UIPanelType)[keyof typeof UIPanelType]
+
+/** One player's uploaded screen recording, played against the demo clock */
+export type SessionRecording = {
+  name: string
+  /** object URL of the uploaded file */
+  url: string
+  /** seconds added to the demo clock time to reach the matching point in the video */
+  offsetSeconds: number
+}
 
 // Version 1 setups carried TF2 class stickers and are dropped on load
 export const SETUP_STORAGE_VERSION = 2 as const

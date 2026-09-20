@@ -18,6 +18,7 @@ import {
   SavedSetup,
   SavedSetupCamera,
   SceneMode,
+  SessionRecording,
   UIPanelType,
 } from '@constants/types'
 import { DrawingState, createInitialDrawingState } from './drawing'
@@ -39,6 +40,10 @@ export type InstanceState = {
   mapCenterPickerActive: boolean
   threeScene: THREE.Scene
   session?: Portal2Session
+  /** one uploaded screen recording per player slot, null where the slot has none */
+  recordings: (SessionRecording | null)[]
+  /** the screen recording the demo clock follows, with what its own time means on that clock */
+  recordingClock: { video: HTMLVideoElement; offsetSeconds: number } | null
   focusedObject?: THREE.Object3D
   lastFocusedPOV?: THREE.Object3D
   drawingCanvas?: CanvasDraw
@@ -57,6 +62,10 @@ export type InstanceState = {
   }
   setThreeScene: (threeScene: THREE.Scene) => void
   setSession: (session: Portal2Session | undefined) => void
+  setRecording: (slot: number, recording: SessionRecording | null) => void
+  setRecordingClock: (
+    recordingClock: { video: HTMLVideoElement; offsetSeconds: number } | null
+  ) => void
   setDrawingCanvas: (drawingCanvas: CanvasDraw) => void
   setFocusedObject: (focusedObject?: THREE.Object3D) => void
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => void
@@ -90,6 +99,8 @@ const useInstance = create<InstanceState>()(set => ({
   mapCenterPickerActive: false,
   threeScene: new THREE.Scene(),
   session: undefined,
+  recordings: [null, null],
+  recordingClock: null,
   focusedObject: undefined,
   lastFocusedPOV: undefined,
   drawingCanvas: undefined,
@@ -104,6 +115,13 @@ const useInstance = create<InstanceState>()(set => ({
   setupCameraBridge: undefined,
   setThreeScene: (threeScene: THREE.Scene) => set({ threeScene }),
   setSession: (session: Portal2Session | undefined) => set({ session }),
+  setRecordingClock: recordingClock => set({ recordingClock }),
+  setRecording: (slot: number, recording: SessionRecording | null) =>
+    set(state => ({
+      recordings: state.recordings.map((existing, index) =>
+        index === slot ? recording : existing
+      ),
+    })),
   setDrawingCanvas: (drawingCanvas: CanvasDraw) => set({ drawingCanvas }),
   setFocusedObject: (focusedObject?: THREE.Object3D) => set({ focusedObject }),
   setLastFocusedPOV: (lastFocusedPOV?: THREE.Object3D) => set({ lastFocusedPOV }),

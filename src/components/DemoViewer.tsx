@@ -22,6 +22,7 @@ import type { Portal2Session } from './Analyse/Data/Session'
 
 // UI Panels
 import { AboutPanel } from '@components/UI/AboutPanel'
+import { LoadPanel } from '@components/UI/LoadPanel'
 import { SettingsPanel } from '@components/UI/SettingsPanel'
 import { PlaybackPanel } from '@components/UI/PlaybackPanel'
 import { EventFeed } from '@components/UI/EventFeed'
@@ -46,6 +47,7 @@ import {
   goToTickAction,
   playbackJumpAction,
   setSceneRtsCenterAction,
+  togglePlaybackAction,
 } from '@zus/actions'
 import { isPerfLoggingEnabled, readJsHeapMemoryMb } from '@utils/misc'
 import { useIsMobile } from '@utils/hooks'
@@ -70,6 +72,17 @@ const ENABLE_DEBUG_MAP_OFFSET = false
 const MARKER_COLOR = '#37ff5f'
 // portal rings stay highlighted this many axis rows after something went through them
 const TRAVERSAL_HIGHLIGHT_ROWS = 45
+// frame gaps longer than this are a stall or a hidden window rather than elapsed playback time
+const MAX_FRAME_DELTA_MILLIS = 250
+// a screen recording plays at its own natural rate, so the demo clock is what bends to follow it,
+// by at most this fraction of its speed
+const DEMO_CLOCK_TRIM_LIMIT = 0.05
+// the demo clock closes a gap to the recording over about this many seconds
+const DEMO_CLOCK_CONVERGE_SECONDS = 2
+// beyond this gap the playhead was moved rather than having drifted, and the recording seeks instead
+const DEMO_CLOCK_SNAP_SECONDS = 1
+// HTMLMediaElement.HAVE_CURRENT_DATA: the recording has a frame at its current position
+const VIDEO_HAVE_CURRENT_DATA = 2
 
 const roundOffset = (x: number, y: number, z: number) => ({
   x: Math.round(x),
@@ -468,6 +481,7 @@ const PanelToolbar = ({ hasSession }: { hasSession: boolean }) => {
       <div className="ui-layer m-3 items-start justify-start">
         <div className="flex items-center">
           <SettingsPanel />
+          <LoadPanel />
           <AboutPanel />
           <SetupsPanel />
           {hasSession && <EventLogPanel />}
@@ -484,21 +498,25 @@ const PanelToolbar = ({ hasSession }: { hasSession: boolean }) => {
       </div>
 
       <div className="ui-layer justift-start m-4 mt-16 items-start">
-        <AboutPanel />
+        <LoadPanel />
       </div>
 
       <div className="ui-layer justift-start m-4 mt-28 items-start">
+        <AboutPanel />
+      </div>
+
+      <div className="ui-layer justift-start m-4 mt-40 items-start">
         <SetupsPanel />
       </div>
 
       {hasSession && (
-        <div className="ui-layer m-4 mt-40 items-start justify-start">
+        <div className="ui-layer m-4 mt-52 items-start justify-start">
           <EventLogPanel />
         </div>
       )}
 
       {hasSession && (
-        <div className="ui-layer m-4 mt-52 items-start justify-start">
+        <div className="ui-layer m-4 mt-64 items-start justify-start">
           <BookmarksPanel />
         </div>
       )}
@@ -580,25 +598,67 @@ class DemoViewer extends Component<DemoViewerProps> {
     // elements are in focus (e.g. when menu is open, we don't want to trigger Canvas events)
     // https://github.com/pmndrs/react-three-fiber/issues/1238
     this.canvasRef.current?.setAttribute('tabindex', '0')
+
+    // Frames are not delivered to a backgrounded window, so playback stops rather than running
+    // the demo clock and the screen recordings out of step with each other
+    window.addEventListener('blur', this.pauseOnFocusLoss)
+    document.addEventListener('visibilitychange', this.pauseOnFocusLoss)
   }
 
   componentWillUnmount() {
     this.playbackSub()
     this.settingsSub()
+
+    window.removeEventListener('blur', this.pauseOnFocusLoss)
+    document.removeEventListener('visibilitychange', this.pauseOnFocusLoss)
+  }
+
+  /**
+   * Pauses playback when the window loses focus or its tab is hidden.
+   */
+  pauseOnFocusLoss = () => {
+    if (!document.hidden && document.hasFocus()) return
+    if (!getState().playback.playing) return
+
+    togglePlaybackAction(false)
   }
 
   //
   // ─── ANIMATION LOOP ─────────────────────────────────────────────────────────────
   //
 
+  /**
+   * How much faster or slower the demo clock runs so that it converges on the screen recording it
+   * follows, which plays at its own natural rate.
+   * @param demoSeconds - Where the demo clock currently sits, in seconds
+   * @returns A multiplier for elapsed frame time, 1 when there is no recording to follow
+   */
+  demoClockTrim = (demoSeconds: number): number => {
+    const clock = useInstance.getState().recordingClock
+    if (!clock) return 1
+
+    const { video, offsetSeconds } = clock
+    if (video.paused || video.ended || video.readyState < VIDEO_HAVE_CURRENT_DATA) return 1
+
+    const recordingLead = video.currentTime - offsetSeconds - demoSeconds
+    if (Math.abs(recordingLead) > DEMO_CLOCK_SNAP_SECONDS) return 1
+
+    const trim = recordingLead / DEMO_CLOCK_CONVERGE_SECONDS
+    return 1 + Math.max(-DEMO_CLOCK_TRIM_LIMIT, Math.min(DEMO_CLOCK_TRIM_LIMIT, trim))
+  }
+
   animate = async (timestamp: number) => {
-    const { playback } = this.state
+    // Read the live store rather than the mirror in this.state, which can lag a frame and make
+    // the loop advance from a stale tick and lose real time
+    const playback = getState().playback
 
     const intervalPerTick = playback.intervalPerTick || 1 / 60
     const millisPerTick = 1000 * intervalPerTick * (1 / playback.speed)
     const frameDelta = timestamp - this.lastTimestamp
 
-    this.elapsedTime += frameDelta
+    this.elapsedTime +=
+      Math.min(frameDelta, MAX_FRAME_DELTA_MILLIS) *
+      this.demoClockTrim(playback.tick * intervalPerTick)
 
     if (playback.playing) {
       if (this.elapsedTime >= millisPerTick) {

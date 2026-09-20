@@ -14,7 +14,10 @@ import { cn } from '@utils/styling'
  */
 export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
   const session = useInstance(state => state.session)
-  const recording = useInstance(state => state.recordings[slot])
+  const recordings = useInstance(state => state.recordings)
+  const recording = recordings[slot]
+  // the demo clock follows the lowest slot that has a recording
+  const isClock = recordings.findIndex(entry => entry !== null) === slot
   const player = session?.players[slot]
   const role = player?.role ?? 'unknown'
   const label = player ? PLAYER_ROLE_NAMES[role] : `Player ${slot + 1}`
@@ -32,7 +35,7 @@ export const RecordingPlaceholder = ({ slot }: { slot: number }) => {
 
       {recording ? (
         <div className="absolute inset-0">
-          <RecordingPlayer recording={recording} />
+          <RecordingPlayer recording={recording} isClock={isClock} />
         </div>
       ) : (
         <>

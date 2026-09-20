@@ -56,21 +56,77 @@ const readFileBuffer = (file: File): Promise<ArrayBuffer> =>
 /**
  * Loads one or two dropped demo files (both players' demos of the same session)
  */
-export const onUploadDemoAction = async (files: File[]) => {
+/**
+ * Reads the demo files out of a set of uploaded files into the buffers the parser takes.
+ * @param files  uploaded files, which may include files that are not demos
+ * @returns one input per demo file in the given order, up to the two a session holds
+ */
+const readDemoFileInputs = async (files: File[]): Promise<DemoFileInput[]> => {
   const demoFiles = files
     .filter(file => file.name.toLowerCase().endsWith('.dem'))
     .slice(0, MAX_DEMOS_PER_SESSION)
-  if (demoFiles.length === 0) {
-    alert('Drop one or two Portal 2 .dem files.')
-    return
-  }
 
   const inputs: DemoFileInput[] = []
   for (const file of demoFiles) {
     inputs.push({ name: file.name, buffer: await readFileBuffer(file) })
   }
+  return inputs
+}
+
+/**
+ * Keeps one player's screen recording, replacing whatever that slot held and releasing the
+ * previous file's object URL.
+ * @param slot  player slot the recording belongs to
+ * @param file  the uploaded video file
+ */
+const setSessionRecording = (slot: number, file: File) => {
+  const instance = useInstance.getState()
+  const previous = instance.recordings[slot]
+  if (previous) URL.revokeObjectURL(previous.url)
+
+  instance.setRecording(slot, {
+    name: file.name,
+    url: URL.createObjectURL(file),
+    offsetSeconds: 0,
+  })
+}
+
+export const onUploadDemoAction = async (files: File[]) => {
+  const inputs = await readDemoFileInputs(files)
+  if (inputs.length === 0) {
+    alert('Drop one or two Portal 2 .dem files.')
+    return
+  }
 
   await parseDemoAction(inputs)
+}
+
+/**
+ * Loads what the load panel was given: parses whichever demos are present and keeps each screen
+ * recording against its player slot. Slots with no file are left as they are.
+ * @param demoFiles       one demo file per player slot, or null where the slot has none
+ * @param recordingFiles  one video file per player slot, or null where the slot has none
+ * @returns whether everything given was applied
+ */
+export const loadSessionFilesAction = async (
+  demoFiles: (File | null)[],
+  recordingFiles: (File | null)[]
+): Promise<boolean> => {
+  try {
+    const inputs = await readDemoFileInputs(demoFiles.filter((file): file is File => file !== null))
+
+    recordingFiles.forEach((file, slot) => {
+      if (file) setSessionRecording(slot, file)
+    })
+
+    if (inputs.length > 0) await parseDemoAction(inputs)
+
+    toggleUIPanelAction(UIPanelType.LOAD, false)
+    return true
+  } catch (error) {
+    console.error(error)
+    return false
+  }
 }
 
 export const parseDemoAction = async (inputs: DemoFileInput[]) => {
@@ -375,7 +431,7 @@ export const playbackJumpAction = async (direction: string) => {
   }
 }
 
-export const togglePlaybackAction = async (playing = undefined) => {
+export const togglePlaybackAction = async (playing?: boolean) => {
   try {
     // Use {playing} value if provided - otherwise use the inverse of current value
     const isPlaying = playing !== undefined ? playing : !getState().playback.playing
